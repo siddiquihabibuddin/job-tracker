@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: jt_postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-jt}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-jtpass}
+      POSTGRES_DB: jt_apps
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-jt} -d jt_apps"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  stats-service:
+    build:
+      context: .
+    container_name: jt_stats
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/jt_stats
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-jt}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-jtpass}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-must-be-at-least-32-characters-long}
+      SERVER_PORT: 8082
+    ports:
+      - "8082:8082"
+
+volumes:
+  pgdata:

@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'applications-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['applications-service:8081']
+
+  - job_name: 'stats-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['stats-service:8082']
+
+  - job_name: 'stats-listener'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['stats-listener:8083']

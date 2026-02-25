@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: api-gateway
+  config:
+    import: "optional:configserver:http://config-server:8888"
+  cloud:
+    gateway:
+      server:
+        webflux:
+          globalcors:
+            add-to-simple-url-handler-mapping: true
+            cors-configurations:
+              '[/**]':
+                allowedOrigins:
+                  - "http://localhost:5173"
+                allowedMethods: [GET, POST, PATCH, DELETE, OPTIONS]
+                allowedHeaders: [Authorization, Content-Type, Idempotency-Key]
+                allowCredentials: true
+                maxAge: 3600
+          routes:
+            - id: auth-service
+              uri: http://applications-service:8081
+              predicates:
+                - Path=/v1/auth/**
+            - id: applications-service
+              uri: http://applications-service:8081
+              predicates:
+                - Path=/v1/applications/**
+            - id: stats-service
+              uri: http://stats-service:8082
+              predicates:
+                - Path=/v1/stats/**
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true

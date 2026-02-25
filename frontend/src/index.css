@@ -1,0 +1,10 @@
+/* Keep overrides minimal so Pico can do its thing */
+:root { color-scheme: light dark; }
+
+.app { padding-block: 1rem; }
+
+/* Utility: align a right-side group inline with headings */
+.flex-right { display: flex; justify-content: flex-end; align-items: center; }
+
+/* Optional: make the placeholder grid breathe a bit */
+.grid article { min-height: 96px; }

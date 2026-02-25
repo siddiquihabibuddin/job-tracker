@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: stats-service
+  config:
+    import: "optional:configserver:http://config-server:8888"
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/jt_stats
+    username: ${DB_USER:jt}
+    password: ${DB_PASSWORD:jtpass}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+server:
+  port: 8082
+
+security:
+  jwt:
+    secret: ${JWT_SECRET:change-me-in-production-must-be-at-least-32-characters-long}
+
+cors:
+  allowed-origins: "http://localhost:5173"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: http://zipkin:9411/api/v2/spans
+
+logging:
+  level:
+    com.jobtracker: INFO
+    org.springframework.security: WARN

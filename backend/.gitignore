@@ -1,0 +1,17 @@
+# Environment files — never commit secrets
+.env
+
+# Maven build artifacts
+target/
+*/target/
+
+# IDE files
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+
+# OS files
+.DS_Store
+Thumbs.db

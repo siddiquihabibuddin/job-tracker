@@ -1,0 +1,12 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets — never commit
+.env
+backend/.env
+
+# Editor
+.idea/
+.vscode/
+*.iml

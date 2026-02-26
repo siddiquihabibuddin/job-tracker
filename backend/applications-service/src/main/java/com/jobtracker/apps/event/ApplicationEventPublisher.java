@@ -5,6 +5,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.concurrent.TimeUnit;
+
 @Service
 public class ApplicationEventPublisher {
 
@@ -30,5 +32,15 @@ public class ApplicationEventPublisher {
                                 result.getRecordMetadata().offset());
                     }
                 });
+    }
+
+    /**
+     * Synchronous publish — blocks up to 10 seconds waiting for broker ack.
+     * Throws if the send fails or times out, allowing the caller to handle per-event errors.
+     */
+    public void publishSync(ApplicationEvent event) throws Exception {
+        kafkaTemplate.send(TOPIC, event.id().toString(), event)
+                .get(10, TimeUnit.SECONDS);
+        log.debug("Outbox sync-published event type={} id={}", event.eventType(), event.id());
     }
 }

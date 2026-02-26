@@ -78,9 +78,10 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
                         │   └──────────▲───────────┘  │  Kafka Consumer      │  │
                         │              │               └──────────────────────┘  │
                         │   ┌──────────┴───────────┐                            │
-                        │   │  Applications Svc    │  Config Server :8888       │
-                        │   │  publishes events    │  Prometheus    :9090       │
-                        │   └──────────────────────┘  Zipkin        :9411       │
+                        │   │  OutboxPoller (5s)   │  Config Server :8888       │
+                        │   │  reads outbox_events │  Prometheus    :9090       │
+                        │   │  → publishes to Kafka│  Zipkin        :9411       │
+                        │   └──────────────────────┘                            │
                         └─────────────────────────────────────────────────────────┘
 ```
 
@@ -100,9 +101,12 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
 
 ### Event Flow
 
-1. `applications-service` creates/updates/deletes an application → publishes `ApplicationEvent` JSON to Kafka
-2. `stats-listener` consumes the event → upserts into `applications_snapshot` in `jt_stats`
-3. `stats-service` queries the snapshot table for fast, join-free analytics
+1. `applications-service` creates/updates/deletes an application → writes an `ApplicationEvent` row to the `outbox_events` table **in the same DB transaction** as the application save
+2. `OutboxPoller` (scheduled every 5s) reads unpublished outbox rows → publishes each to Kafka synchronously → marks `published_at`
+3. `stats-listener` consumes the event → upserts into `applications_snapshot` in `jt_stats`
+4. `stats-service` queries the snapshot table for fast, join-free analytics
+
+This is the **Transactional Outbox Pattern** — Kafka being down never causes data loss. Events accumulate safely in Postgres and drain automatically when Kafka recovers. The `stats-listener` uses `ON CONFLICT` upserts so duplicate delivery on poller restart is safe.
 
 ---
 
@@ -113,6 +117,7 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
 - **Analytics Dashboard** — Application counts by status and source, 12-week trend chart
 - **Idempotent writes** — All POST/PATCH endpoints require an `Idempotency-Key` header
 - **Soft deletes** — Applications are logically deleted (`deleted_at` timestamp); all queries filter accordingly
+- **Transactional Outbox Pattern** — Events are written to `outbox_events` in the same DB transaction as the application save; a scheduled poller publishes them to Kafka, guaranteeing no event loss even if Kafka is temporarily unavailable
 - **Event-driven read model** — The stats snapshot is asynchronously kept in sync via Kafka, keeping write and read paths fully decoupled
 - **Kafka dead-letter queue** — Failed consumer messages are retried 3x then routed to a DLQ topic
 - **Observability** — Structured logging with correlation IDs, Micrometer Prometheus metrics, Zipkin distributed tracing
@@ -244,6 +249,7 @@ JobTracker/
 - `applications` — job applications with JSONB tags, salary range, soft-delete
 - `application_status_history` — full audit trail of status transitions
 - `application_notes` — notes per application
+- `outbox_events` — transactional outbox; events written here atomically with application mutations, polled and published to Kafka every 5s
 
 **`jt_stats`** (read database)
 

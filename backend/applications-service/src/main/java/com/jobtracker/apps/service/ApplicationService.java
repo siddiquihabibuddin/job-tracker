@@ -1,11 +1,12 @@
 package com.jobtracker.apps.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobtracker.apps.api.dto.*;
 import com.jobtracker.apps.api.mapper.ApplicationMapper;
 import com.jobtracker.apps.domain.model.*;
 import com.jobtracker.apps.domain.repo.*;
 import com.jobtracker.apps.event.ApplicationEvent;
-import com.jobtracker.apps.event.ApplicationEventPublisher;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.persistence.EntityNotFoundException;
@@ -17,7 +18,6 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
 import java.time.OffsetDateTime;
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -38,7 +38,8 @@ public class ApplicationService {
     private final UserRepository userRepo;
     private final ApplicationNoteRepository noteRepo;
     private final ApplicationStatusHistoryRepository histRepo;
-    private final ApplicationEventPublisher eventPublisher;
+    private final OutboxEventRepository outboxRepo;
+    private final ObjectMapper objectMapper;
 
     private final ApplicationMapper mapper = new ApplicationMapper();
 
@@ -49,13 +50,15 @@ public class ApplicationService {
                               UserRepository userRepo,
                               ApplicationNoteRepository noteRepo,
                               ApplicationStatusHistoryRepository histRepo,
-                              ApplicationEventPublisher eventPublisher,
+                              OutboxEventRepository outboxRepo,
+                              ObjectMapper objectMapper,
                               MeterRegistry meterRegistry) {
         this.appRepo = appRepo;
         this.userRepo = userRepo;
         this.noteRepo = noteRepo;
         this.histRepo = histRepo;
-        this.eventPublisher = eventPublisher;
+        this.outboxRepo = outboxRepo;
+        this.objectMapper = objectMapper;
         this.createdCounter = Counter.builder("applications.created.total")
                 .description("Total applications created")
                 .register(meterRegistry);
@@ -125,7 +128,7 @@ public class ApplicationService {
             noteRepo.save(note);
         }
 
-        eventPublisher.publish(new ApplicationEvent(
+        outboxRepo.save(toOutboxEvent(new ApplicationEvent(
                 "APPLICATION_CREATED",
                 saved.getId(),
                 currentUserId(),
@@ -133,7 +136,7 @@ public class ApplicationService {
                 saved.getSource(),
                 saved.getCreatedAt(),
                 null,
-                OffsetDateTime.now()));
+                OffsetDateTime.now())));
 
         createdCounter.increment();
         return mapper.toDto(saved);
@@ -166,7 +169,7 @@ public class ApplicationService {
             histRepo.save(hist);
         }
 
-        eventPublisher.publish(new ApplicationEvent(
+        outboxRepo.save(toOutboxEvent(new ApplicationEvent(
                 "APPLICATION_UPDATED",
                 a.getId(),
                 currentUserId(),
@@ -174,7 +177,7 @@ public class ApplicationService {
                 a.getSource(),
                 a.getCreatedAt(),
                 a.getDeletedAt(),
-                OffsetDateTime.now()));
+                OffsetDateTime.now())));
 
         return mapper.toDto(a);
     }
@@ -185,7 +188,7 @@ public class ApplicationService {
         a.setDeletedAt(OffsetDateTime.now());
         appRepo.save(a);
 
-        eventPublisher.publish(new ApplicationEvent(
+        outboxRepo.save(toOutboxEvent(new ApplicationEvent(
                 "APPLICATION_DELETED",
                 a.getId(),
                 currentUserId(),
@@ -193,7 +196,7 @@ public class ApplicationService {
                 a.getSource(),
                 a.getCreatedAt(),
                 a.getDeletedAt(),
-                OffsetDateTime.now()));
+                OffsetDateTime.now())));
 
         deletedCounter.increment();
     }
@@ -220,6 +223,20 @@ public class ApplicationService {
         note.setBody(req.getContent());
         noteRepo.save(note);
         return mapper.toDto(note);
+    }
+
+    private OutboxEvent toOutboxEvent(ApplicationEvent event) {
+        try {
+            var o = new OutboxEvent();
+            o.setId(UUID.randomUUID());
+            o.setAggregateId(event.id());
+            o.setEventType(event.eventType());
+            o.setPayload(objectMapper.writeValueAsString(event));
+            o.setCreatedAt(OffsetDateTime.now());
+            return o;
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Failed to serialize ApplicationEvent to outbox payload", e);
+        }
     }
 
 }

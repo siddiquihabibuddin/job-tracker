@@ -4,6 +4,22 @@ A full-stack job application tracking platform built with a microservices archit
 
 ---
 
+## Screenshots
+
+| Login | Dashboard |
+|---|---|
+| ![Login](docs/screenshots/login.png) | ![Dashboard](docs/screenshots/dashboard.png) |
+
+| Applications | Application Detail |
+|---|---|
+| ![Applications](docs/screenshots/applications.png) | ![Application Detail](docs/screenshots/view-application.png) |
+
+| New Application |
+|---|
+| ![New Application](docs/screenshots/new-application.png) |
+
+---
+
 ## Tech Stack
 
 **Backend**

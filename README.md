@@ -113,8 +113,10 @@ This is the **Transactional Outbox Pattern** — Kafka being down never causes d
 ## Features
 
 - **JWT Authentication** — HS256 token-based auth, enforced by Spring Security on all services
-- **Full CRUD** — Create, read, update, and soft-delete job applications
-- **Analytics Dashboard** — Application counts by status and source, 12-week trend chart
+- **Full CRUD** — Create, read, update, and soft-delete job applications with rich fields: apply date, salary range, job link, call received, reject date, resume, login details, notes
+- **CSV Import** — Bulk import applications from a spreadsheet export; handles quoted commas, multiple date formats, salary parsing (`$50K`, `50,000–80,000`), and flexible status mapping (`Open` → APPLIED, `Closed` → REJECTED, Open + Call → PHONE)
+- **Advanced filtering** — Filter applications by status, search (company/role), month, year, and call received; sort by apply date or date added; page-based pagination (20 per page)
+- **Analytics Dashboard** — By Month / By Year toggle with grouped Applied vs Rejected bar chart, summary table, and 7 open-window KPI cards (last 7d / 15d / 30d / 3mo / 6mo / 9mo / 1yr)
 - **Idempotent writes** — All POST/PATCH endpoints require an `Idempotency-Key` header
 - **Soft deletes** — Applications are logically deleted (`deleted_at` timestamp); all queries filter accordingly
 - **Transactional Outbox Pattern** — Events are written to `outbox_events` in the same DB transaction as the application save; a scheduled poller publishes them to Kafka, guaranteeing no event loss even if Kafka is temporarily unavailable
@@ -141,17 +143,27 @@ Response: { "token": "eyJ...", "email": "...", "userId": "..." }
 ### Applications
 
 ```
-GET    /v1/applications?status=APPLIED&search=google&page=0&limit=20
+GET    /v1/applications?status=APPLIED&search=google&month=4&year=2025&gotCall=true&sortBy=appliedAt&page=0&limit=20
 POST   /v1/applications                     (Idempotency-Key header required)
 GET    /v1/applications/{id}
 PATCH  /v1/applications/{id}                (Idempotency-Key header required)
 DELETE /v1/applications/{id}
+
+POST   /v1/applications/import              (multipart/form-data, field: file)
 
 POST   /v1/applications/{id}/notes
 PATCH  /v1/applications/{appId}/notes/{noteId}
 ```
 
 Application statuses: `APPLIED` → `PHONE` → `ONSITE` → `OFFER` → `ACCEPTED / REJECTED / WITHDRAWN`
+
+**CSV import** — the file must have this header row (column order matters):
+
+```
+Company,Role,Location,Salary Range,Apply Date,Final Status,Job Link,Resume Uploaded,Call,Reject Date,Login Details,Days pending
+```
+
+Response: `{ imported: N, failed: M, errors: ["row 3: ...", ...] }`
 
 ### Analytics
 
@@ -161,6 +173,14 @@ Response: { windowDays, totalApplied, byStatus: {...}, bySource: {...}, generate
 
 GET /v1/stats/trend?period=week&weeks=12
 Response: { period, points: [{ start, end, count }] }
+
+GET /v1/stats/breakdown?groupBy=month&year=2025
+GET /v1/stats/breakdown?groupBy=year
+Response: {
+  groupBy, year,
+  rows: [{ label, periodNum, totalApplied, totalRejected, totalOpen }],
+  openWindows: { last7d, last15d, last30d, last3m, last6m, last9m, last1y }
+}
 ```
 
 Swagger UI available at `http://localhost:8081/swagger-ui.html` and `http://localhost:8082/swagger-ui.html`.
@@ -246,14 +266,14 @@ JobTracker/
 **`jt_apps`** (write database)
 
 - `users` — registered users
-- `applications` — job applications with JSONB tags, salary range, soft-delete
+- `applications` — job applications with JSONB tags, salary range, soft-delete, and extended fields: `applied_at`, `job_link`, `resume_uploaded`, `got_call`, `reject_date`, `login_details`
 - `application_status_history` — full audit trail of status transitions
 - `application_notes` — notes per application
 - `outbox_events` — transactional outbox; events written here atomically with application mutations, polled and published to Kafka every 5s
 
 **`jt_stats`** (read database)
 
-- `applications_snapshot` — denormalized projection of applications, kept in sync via Kafka; powers all analytics queries
+- `applications_snapshot` — denormalized projection of applications, kept in sync via Kafka; includes `applied_at` for accurate date-based analytics
 
 All schema changes are managed by Flyway migrations (`ddl-auto: validate`).
 

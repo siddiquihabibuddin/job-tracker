@@ -18,5 +18,11 @@ public record CreateApplicationRequest(
         @Size(max = 3) String currency,
         LocalDate nextFollowUpOn,
         String[] tags,
-        @Size(max = 5000) String notes
+        @Size(max = 5000) String notes,
+        LocalDate appliedAt,
+        String jobLink,
+        String resumeUploaded,
+        Boolean gotCall,
+        LocalDate rejectDate,
+        String loginDetails
 ) {}

@@ -45,6 +45,13 @@ public class Application extends Auditable {
     private String tagsJson;
     @Column(name = "deleted_at") private java.time.OffsetDateTime deletedAt;
 
+    @Column(name = "applied_at") private LocalDate appliedAt;
+    @Column(name = "job_link") private String jobLink;
+    @Column(name = "resume_uploaded") private String resumeUploaded;
+    @Column(name = "got_call") private boolean gotCall;
+    @Column(name = "reject_date") private LocalDate rejectDate;
+    @Column(name = "login_details") private String loginDetails;
+
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
     public User getUser() { return user; }
@@ -71,4 +78,16 @@ public class Application extends Auditable {
     public void setTagsJson(String tagsJson) { this.tagsJson = tagsJson; }
     public java.time.OffsetDateTime getDeletedAt() { return deletedAt; }
     public void setDeletedAt(java.time.OffsetDateTime deletedAt) { this.deletedAt = deletedAt; }
+    public LocalDate getAppliedAt() { return appliedAt; }
+    public void setAppliedAt(LocalDate appliedAt) { this.appliedAt = appliedAt; }
+    public String getJobLink() { return jobLink; }
+    public void setJobLink(String jobLink) { this.jobLink = jobLink; }
+    public String getResumeUploaded() { return resumeUploaded; }
+    public void setResumeUploaded(String resumeUploaded) { this.resumeUploaded = resumeUploaded; }
+    public boolean isGotCall() { return gotCall; }
+    public void setGotCall(boolean gotCall) { this.gotCall = gotCall; }
+    public LocalDate getRejectDate() { return rejectDate; }
+    public void setRejectDate(LocalDate rejectDate) { this.rejectDate = rejectDate; }
+    public String getLoginDetails() { return loginDetails; }
+    public void setLoginDetails(String loginDetails) { this.loginDetails = loginDetails; }
 }

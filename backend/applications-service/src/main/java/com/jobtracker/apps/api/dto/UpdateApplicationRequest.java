@@ -15,5 +15,11 @@ public record UpdateApplicationRequest(
         BigDecimal salaryMax,
         String currency,
         LocalDate nextFollowUpOn,
-        String[] tags
+        String[] tags,
+        LocalDate appliedAt,
+        String jobLink,
+        String resumeUploaded,
+        Boolean gotCall,
+        LocalDate rejectDate,
+        String loginDetails
 ) {}

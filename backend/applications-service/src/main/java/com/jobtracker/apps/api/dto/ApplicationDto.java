@@ -19,5 +19,11 @@ public record ApplicationDto(
         LocalDate nextFollowUpOn,
         String[] tags,
         OffsetDateTime createdAt,
-        OffsetDateTime updatedAt
+        OffsetDateTime updatedAt,
+        LocalDate appliedAt,
+        String jobLink,
+        String resumeUploaded,
+        boolean gotCall,
+        LocalDate rejectDate,
+        String loginDetails
 ) {}

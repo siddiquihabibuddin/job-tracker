@@ -1,5 +1,6 @@
 package com.jobtracker.stats.api;
 
+import com.jobtracker.stats.api.dto.BreakdownResponseDto;
 import com.jobtracker.stats.api.dto.StatsSummaryDto;
 import com.jobtracker.stats.api.dto.TrendResponseDto;
 import com.jobtracker.stats.service.StatsService;
@@ -36,6 +37,13 @@ public class StatsController {
             @RequestParam(defaultValue = "week") String period,
             @RequestParam(defaultValue = "12") @Min(1) @Max(52) int weeks) {
         return svc.getTrend(weeks);
+    }
+
+    @GetMapping("/breakdown")
+    public BreakdownResponseDto breakdown(
+            @RequestParam(defaultValue = "month") String groupBy,
+            @RequestParam(required = false) Integer year) {
+        return svc.getBreakdown(groupBy, year);
     }
 
     private int parseWindowDays(String window) {

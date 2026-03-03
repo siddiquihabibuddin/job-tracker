@@ -23,3 +23,35 @@ export async function getTrend(weeks = 12): Promise<TrendPoint[]> {
   const res = await httpStats.get<{ period: string; points: TrendPoint[] }>(`/stats/trend`, { params: { period: 'week', weeks } })
   return res.data.points
 }
+
+export interface BreakdownRow {
+  label: string
+  periodNum: number
+  totalApplied: number
+  totalRejected: number
+  totalOpen: number
+}
+
+export interface OpenWindows {
+  last7d: number
+  last15d: number
+  last30d: number
+  last3m: number
+  last6m: number
+  last9m: number
+  last1y: number
+}
+
+export interface BreakdownResponse {
+  groupBy: 'month' | 'year'
+  year: number | null
+  rows: BreakdownRow[]
+  openWindows: OpenWindows
+}
+
+export async function getBreakdown(groupBy: 'month' | 'year', year?: number): Promise<BreakdownResponse> {
+  const params: Record<string, string> = { groupBy }
+  if (year !== undefined) params.year = String(year)
+  const res = await httpStats.get<BreakdownResponse>('/stats/breakdown', { params })
+  return res.data
+}

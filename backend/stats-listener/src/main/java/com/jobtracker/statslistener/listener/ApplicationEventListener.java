@@ -27,16 +27,16 @@ public class ApplicationEventListener {
         try {
             switch (event.eventType()) {
                 case "APPLICATION_CREATED" -> jdbc.update(
-                        "INSERT INTO applications_snapshot (id, user_id, status, source, created_at, deleted_at) " +
-                        "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING",
+                        "INSERT INTO applications_snapshot (id, user_id, status, source, created_at, deleted_at, applied_at) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING",
                         event.id(), event.userId(), event.status(), event.source(),
-                        toTs(event.createdAt()), toTs(event.deletedAt()));
+                        toTs(event.createdAt()), toTs(event.deletedAt()), event.appliedAt());
                 case "APPLICATION_UPDATED" -> jdbc.update(
-                        "INSERT INTO applications_snapshot (id, user_id, status, source, created_at, deleted_at) " +
-                        "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE " +
-                        "SET status = EXCLUDED.status, source = EXCLUDED.source, deleted_at = EXCLUDED.deleted_at",
+                        "INSERT INTO applications_snapshot (id, user_id, status, source, created_at, deleted_at, applied_at) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE " +
+                        "SET status = EXCLUDED.status, source = EXCLUDED.source, deleted_at = EXCLUDED.deleted_at, applied_at = EXCLUDED.applied_at",
                         event.id(), event.userId(), event.status(), event.source(),
-                        toTs(event.createdAt()), toTs(event.deletedAt()));
+                        toTs(event.createdAt()), toTs(event.deletedAt()), event.appliedAt());
                 case "APPLICATION_DELETED" -> jdbc.update(
                         "UPDATE applications_snapshot SET deleted_at = ? WHERE id = ?",
                         toTs(event.deletedAt()), event.id());

@@ -11,5 +11,6 @@ public record ApplicationEvent(
         String source,
         OffsetDateTime createdAt,
         OffsetDateTime deletedAt,
-        OffsetDateTime occurredAt) {
+        OffsetDateTime occurredAt,
+        java.time.LocalDate appliedAt) {
 }

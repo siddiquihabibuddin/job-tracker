@@ -10,8 +10,10 @@ import com.jobtracker.apps.event.ApplicationEvent;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.criteria.Predicate;
 import jakarta.transaction.Transactional;
 import org.springframework.data.domain.*;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -69,17 +71,13 @@ public class ApplicationService {
 
     // --- Query ---
 
-    public PageResponse<ApplicationDto> list(String status, String search, int page, int limit) {
-        Pageable pageable = PageRequest.of(Math.max(0, page), Math.min(100, Math.max(1, limit)), Sort.by(Sort.Direction.DESC, "createdAt"));
+    public PageResponse<ApplicationDto> list(String status, String search, Integer month, Integer year, Boolean gotCall, String sortBy, int page, int limit) {
+        String sortField = "appliedAt".equalsIgnoreCase(sortBy) ? "appliedAt" : "createdAt";
+        Pageable pageable = PageRequest.of(Math.max(0, page), Math.min(100, Math.max(1, limit)), Sort.by(Sort.Direction.DESC, sortField));
         UUID userId = currentUserId();
 
-        Page<Application> p;
-        if (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status)) {
-            AppStatus st = AppStatus.valueOf(status.toUpperCase());
-            p = appRepo.findAllByUser_IdAndStatusAndDeletedAtIsNull(userId, st, pageable);
-        } else {
-            p = appRepo.findAllByUser_IdAndDeletedAtIsNull(userId, pageable);
-        }
+        Specification<Application> spec = buildSpec(userId, status, month, year, gotCall);
+        Page<Application> p = appRepo.findAll(spec, pageable);
 
         // simple search in-memory (company/role) for MVP
         var items = p.getContent().stream()
@@ -93,6 +91,32 @@ public class ApplicationService {
                 .toList();
 
         return new PageResponse<>(items, pageable.getPageSize(), p.getTotalElements(), p.getTotalPages(), p.getNumber());
+    }
+
+    private Specification<Application> buildSpec(UUID userId, String status, Integer month, Integer year, Boolean gotCall) {
+        return (root, query, cb) -> {
+            var predicates = new java.util.ArrayList<Predicate>();
+            predicates.add(cb.equal(root.get("user").get("id"), userId));
+            predicates.add(cb.isNull(root.get("deletedAt")));
+
+            if (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status)) {
+                predicates.add(cb.equal(root.get("status"), AppStatus.valueOf(status.toUpperCase())));
+            }
+            if (month != null) {
+                var monthExpr = cb.function("date_part", Double.class,
+                        cb.literal("month"), root.get("appliedAt"));
+                predicates.add(cb.equal(monthExpr, month.doubleValue()));
+            }
+            if (year != null) {
+                var yearExpr = cb.function("date_part", Double.class,
+                        cb.literal("year"), root.get("appliedAt"));
+                predicates.add(cb.equal(yearExpr, year.doubleValue()));
+            }
+            if (gotCall != null) {
+                predicates.add(cb.equal(root.get("gotCall"), gotCall));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
     }
 
     public ApplicationDto get(UUID id) {
@@ -118,6 +142,12 @@ public class ApplicationService {
         a.setCurrency(req.currency() != null ? req.currency() : "USD");
         a.setNextFollowUpOn(req.nextFollowUpOn());
         a.setTagsJson(mapper.tagsToJson(req.tags()));
+        a.setAppliedAt(req.appliedAt());
+        a.setJobLink(req.jobLink());
+        a.setResumeUploaded(req.resumeUploaded());
+        if (req.gotCall() != null) a.setGotCall(req.gotCall());
+        a.setRejectDate(req.rejectDate());
+        a.setLoginDetails(req.loginDetails());
         var saved = appRepo.saveAndFlush(a);
 
         if (req.notes() != null && !req.notes().isBlank()) {
@@ -136,7 +166,8 @@ public class ApplicationService {
                 saved.getSource(),
                 saved.getCreatedAt(),
                 null,
-                OffsetDateTime.now())));
+                OffsetDateTime.now(),
+                saved.getAppliedAt())));
 
         createdCounter.increment();
         return mapper.toDto(saved);
@@ -158,6 +189,12 @@ public class ApplicationService {
         if (req.currency() != null) a.setCurrency(req.currency());
         if (req.nextFollowUpOn() != null) a.setNextFollowUpOn(req.nextFollowUpOn());
         if (req.tags() != null) a.setTagsJson(mapper.tagsToJson(req.tags()));
+        if (req.appliedAt() != null) a.setAppliedAt(req.appliedAt());
+        if (req.jobLink() != null) a.setJobLink(req.jobLink());
+        if (req.resumeUploaded() != null) a.setResumeUploaded(req.resumeUploaded());
+        if (req.gotCall() != null) a.setGotCall(req.gotCall());
+        if (req.rejectDate() != null) a.setRejectDate(req.rejectDate());
+        if (req.loginDetails() != null) a.setLoginDetails(req.loginDetails());
 
         appRepo.save(a);
 
@@ -177,7 +214,8 @@ public class ApplicationService {
                 a.getSource(),
                 a.getCreatedAt(),
                 a.getDeletedAt(),
-                OffsetDateTime.now())));
+                OffsetDateTime.now(),
+                a.getAppliedAt())));
 
         return mapper.toDto(a);
     }
@@ -196,7 +234,8 @@ public class ApplicationService {
                 a.getSource(),
                 a.getCreatedAt(),
                 a.getDeletedAt(),
-                OffsetDateTime.now())));
+                OffsetDateTime.now(),
+                a.getAppliedAt())));
 
         deletedCounter.increment();
     }

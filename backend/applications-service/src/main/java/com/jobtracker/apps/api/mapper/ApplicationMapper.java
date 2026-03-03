@@ -35,7 +35,13 @@ public class ApplicationMapper {
                 a.getNextFollowUpOn(),
                 tags,
                 a.getCreatedAt(),
-                a.getUpdatedAt()
+                a.getUpdatedAt(),
+                a.getAppliedAt(),
+                a.getJobLink(),
+                a.getResumeUploaded(),
+                a.isGotCall(),
+                a.getRejectDate(),
+                a.getLoginDetails()
         );
     }
 

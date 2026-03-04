@@ -96,7 +96,7 @@ export async function getApplicationById(id: string): Promise<Application> {
   return res.data
 }
 
-export async function patchApplication(id: string, body: Partial<Pick<Application, 'status' | 'source'>>): Promise<Application> {
+export async function patchApplication(id: string, body: Partial<Pick<Application, 'status' | 'source' | 'rejectDate' | 'gotCall'>>): Promise<Application> {
   const res = await httpApps.patch<Application>(
     `/applications/${id}`,
     body,

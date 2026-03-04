@@ -26,6 +26,8 @@ export default function ApplicationDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [editingRejectDate, setEditingRejectDate] = useState(false)
+  const [rejectDateInput, setRejectDateInput] = useState('')
   const [toast, setToast] = useState<string | null>(null)
 
   useEffect(() => {
@@ -68,6 +70,24 @@ export default function ApplicationDetail() {
       // rollback
       setApp(prev)
       setError(e instanceof Error ? e.message : 'Failed to update status')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function saveRejectDate() {
+    if (!app || !id) return
+    setSaving(true)
+    try {
+      const updated = USE_MOCK
+        ? (await updateMockApplication(id, { rejectDate: rejectDateInput || undefined })) as Application
+        : await apiPatch(id, { rejectDate: rejectDateInput || undefined })
+      setApp(updated)
+      setEditingRejectDate(false)
+      setToast('Reject date saved')
+      setTimeout(() => setToast(null), 1500)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to save')
     } finally {
       setSaving(false)
     }
@@ -157,13 +177,63 @@ export default function ApplicationDetail() {
             <p><strong>Resume Uploaded:</strong> {app.resumeUploaded}</p>
           )}
 
-          {app.gotCall != null && (
-            <p><strong>Got Call:</strong> {app.gotCall ? 'Yes' : 'No'}</p>
-          )}
+          <p style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <strong>Got Call:</strong>
+            <input
+              type="checkbox"
+              style={{ margin: 0 }}
+              checked={app.gotCall ?? false}
+              disabled={saving}
+              onChange={async e => {
+                const next = e.target.checked
+                const prev = app
+                setApp({ ...app, gotCall: next })
+                setSaving(true)
+                try {
+                  const updated = USE_MOCK
+                    ? (await updateMockApplication(id!, { gotCall: next })) as Application
+                    : await apiPatch(id!, { gotCall: next })
+                  setApp(updated)
+                  setToast(`Got Call marked ${next ? 'Yes' : 'No'}`)
+                  setTimeout(() => setToast(null), 1500)
+                } catch {
+                  setApp(prev)
+                } finally {
+                  setSaving(false)
+                }
+              }}
+            />
+            <span style={{ fontSize: '0.9rem' }}>{app.gotCall ? 'Yes' : 'No'}</span>
+          </p>
 
-          {app.rejectDate && (
-            <p><strong>Reject Date:</strong> {formatDate(app.rejectDate)}</p>
-          )}
+          <p>
+            <strong>Reject Date:</strong>{' '}
+            {editingRejectDate ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                <input
+                  type="date"
+                  style={{ display: 'inline', width: 'auto', marginBottom: 0, padding: '2px 6px', fontSize: '0.9rem' }}
+                  value={rejectDateInput}
+                  onChange={e => setRejectDateInput(e.target.value)}
+                  autoFocus
+                />
+                <button style={{ padding: '2px 10px', fontSize: '0.8rem', marginBottom: 0 }} disabled={saving} onClick={saveRejectDate}>Save</button>
+                <button className="secondary" style={{ padding: '2px 10px', fontSize: '0.8rem', marginBottom: 0 }} onClick={() => setEditingRejectDate(false)}>Cancel</button>
+              </span>
+            ) : (
+              <span>
+                {app.rejectDate ? formatDate(app.rejectDate) : <em style={{ color: 'var(--pico-muted-color)' }}>Not set</em>}
+                {' '}
+                <button
+                  className="secondary"
+                  style={{ padding: '1px 8px', fontSize: '0.75rem', marginBottom: 0 }}
+                  onClick={() => { setRejectDateInput(app.rejectDate ?? ''); setEditingRejectDate(true) }}
+                >
+                  {app.rejectDate ? 'Edit' : 'Add'}
+                </button>
+              </span>
+            )}
+          </p>
 
           {app.loginDetails && (
             <p><strong>Login Details:</strong> {app.loginDetails}</p>

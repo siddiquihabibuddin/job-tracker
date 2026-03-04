@@ -42,6 +42,7 @@ A full-stack job application tracking platform built with a microservices archit
 **Infrastructure**
 
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker)
+![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=flat-square&logo=redis)
 ![Prometheus](https://img.shields.io/badge/Prometheus-monitoring-E6522C?style=flat-square&logo=prometheus)
 ![Zipkin](https://img.shields.io/badge/Zipkin-tracing-FE7139?style=flat-square)
 
@@ -91,11 +92,12 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
 |---|---|---|
 | **api-gateway** | 8080 | Single entry point — routes traffic, handles CORS globally |
 | **applications-service** | 8081 | Write service — REST CRUD, JPA + Hibernate, publishes Kafka events |
-| **stats-service** | 8082 | Read service — analytics queries on denormalized snapshot table |
-| **stats-listener** | 8083 | Kafka consumer — consumes events, upserts `applications_snapshot` |
+| **stats-service** | 8082 | Read service — analytics from pre-computed agg tables, Redis-cached responses |
+| **stats-listener** | 8083 | Kafka consumer — upserts `applications_snapshot`, maintains `agg_monthly`/`agg_weekly` |
 | **config-server** | 8888 | Centralized config for all services (Spring Cloud Config) |
 | **PostgreSQL** | 5432 | Two databases: `jt_apps` (write) and `jt_stats` (read) |
 | **Kafka** | 9092 | KRaft mode, topic: `application-events` |
+| **Redis** | 6379 | Cache for all three stats endpoints, 5-minute TTL |
 | **Prometheus** | 9090 | Scrapes `/actuator/prometheus` from all Spring Boot services |
 | **Zipkin** | 9411 | Distributed tracing, 100% sampling |
 
@@ -103,8 +105,8 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
 
 1. `applications-service` creates/updates/deletes an application → writes an `ApplicationEvent` row to the `outbox_events` table **in the same DB transaction** as the application save
 2. `OutboxPoller` (scheduled every 5s) reads unpublished outbox rows → publishes each to Kafka synchronously → marks `published_at`
-3. `stats-listener` consumes the event → upserts into `applications_snapshot` in `jt_stats`
-4. `stats-service` queries the snapshot table for fast, join-free analytics
+3. `stats-listener` consumes the event → upserts into `applications_snapshot` in `jt_stats`, then atomically recomputes the affected rows in `agg_monthly` and `agg_weekly` (pre-aggregated tables)
+4. `stats-service` queries `agg_monthly` / `agg_weekly` for indexed reads; results are cached in Redis for 5 minutes
 
 This is the **Transactional Outbox Pattern** — Kafka being down never causes data loss. Events accumulate safely in Postgres and drain automatically when Kafka recovers. The `stats-listener` uses `ON CONFLICT` upserts so duplicate delivery on poller restart is safe.
 
@@ -117,6 +119,8 @@ This is the **Transactional Outbox Pattern** — Kafka being down never causes d
 - **CSV Import** — Bulk import applications from a spreadsheet export; handles quoted commas, multiple date formats, salary parsing (`$50K`, `50,000–80,000`), and flexible status mapping (`Open` → APPLIED, `Closed` → REJECTED, Open + Call → PHONE)
 - **Advanced filtering** — Filter applications by status, search (company/role), month, year, and call received; sort by apply date or date added; page-based pagination (20 per page)
 - **Analytics Dashboard** — By Month / By Year toggle with grouped Applied vs Rejected bar chart, summary table, and 7 open-window KPI cards (last 7d / 15d / 30d / 3mo / 6mo / 9mo / 1yr)
+- **Pre-computed aggregate tables** — `agg_monthly` and `agg_weekly` in `jt_stats` are maintained in-sync by stats-listener (recomputed atomically on every Kafka event); stats-service reads from these tables with indexed scans instead of live GROUP BY on the raw snapshot
+- **Redis caching** — All three stats endpoints (`/summary`, `/trend`, `/breakdown`) are cached in Redis with a 5-minute TTL; per-type `Jackson2JsonRedisSerializer` handles Java record serialization correctly
 - **Idempotent writes** — All POST/PATCH endpoints require an `Idempotency-Key` header
 - **Soft deletes** — Applications are logically deleted (`deleted_at` timestamp); all queries filter accordingly
 - **Transactional Outbox Pattern** — Events are written to `outbox_events` in the same DB transaction as the application save; a scheduled poller publishes them to Kafka, guaranteeing no event loss even if Kafka is temporarily unavailable
@@ -274,6 +278,8 @@ JobTracker/
 **`jt_stats`** (read database)
 
 - `applications_snapshot` — denormalized projection of applications, kept in sync via Kafka; includes `applied_at` for accurate date-based analytics
+- `agg_monthly` — pre-computed application counts keyed by `(user_id, year, month, status)`; updated atomically on every Kafka event; enables `breakdown` and month-level open-window queries with a single indexed scan
+- `agg_weekly` — pre-computed weekly counts keyed by `(user_id, week_start)`; updated atomically on every Kafka event; enables `trend` queries with a fast indexed range scan
 
 All schema changes are managed by Flyway migrations (`ddl-auto: validate`).
 

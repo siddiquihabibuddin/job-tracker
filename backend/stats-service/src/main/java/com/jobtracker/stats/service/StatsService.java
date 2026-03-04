@@ -6,14 +6,17 @@ import com.jobtracker.stats.api.dto.OpenWindowsDto;
 import com.jobtracker.stats.api.dto.StatsSummaryDto;
 import com.jobtracker.stats.api.dto.TrendPointDto;
 import com.jobtracker.stats.api.dto.TrendResponseDto;
+import com.jobtracker.stats.config.CacheConfig;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Service;
 
+import java.sql.Date;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -38,6 +41,7 @@ public class StatsService {
                 .register(meterRegistry);
     }
 
+    @Cacheable(cacheNames = CacheConfig.CACHE_SUMMARY, key = "#windowDays")
     public StatsSummaryDto getSummary(int windowDays) {
         log.info("Serving summary query windowDays={}", windowDays);
         queriesCounter.increment();
@@ -67,24 +71,23 @@ public class StatsService {
                 OffsetDateTime.now().toString());
     }
 
+    @Cacheable(cacheNames = CacheConfig.CACHE_TREND, key = "#weeks")
     public TrendResponseDto getTrend(int weeks) {
         log.info("Serving trend query weeks={}", weeks);
         queriesCounter.increment();
-        String interval = weeks + " weeks";
+
+        LocalDate currentWeekMonday = LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        LocalDate windowStart = currentWeekMonday.minusWeeks(weeks - 1);
 
         Map<LocalDate, Long> dbResults = new LinkedHashMap<>();
         jdbc.query(
-                "SELECT date_trunc('week', COALESCE(applied_at, created_at::date)) AS week_start, COUNT(*) " +
-                "FROM applications_snapshot " +
-                "WHERE user_id=? AND deleted_at IS NULL AND COALESCE(applied_at, created_at::date) >= (NOW() - ?::interval)::date " +
-                "GROUP BY 1 ORDER BY 1",
+                "SELECT week_start, cnt FROM agg_weekly WHERE user_id=? AND week_start >= ? ORDER BY week_start",
                 (RowCallbackHandler) rs -> {
-                    LocalDate weekStart = rs.getTimestamp(1).toLocalDateTime().toLocalDate();
+                    LocalDate weekStart = rs.getObject(1, LocalDate.class);
                     dbResults.put(weekStart, rs.getLong(2));
                 },
-                DEMO_USER_ID, interval);
+                DEMO_USER_ID, Date.valueOf(windowStart));
 
-        LocalDate currentWeekMonday = LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         List<TrendPointDto> points = new ArrayList<>(weeks);
         for (int i = weeks - 1; i >= 0; i--) {
             LocalDate weekStart = currentWeekMonday.minusWeeks(i);
@@ -96,68 +99,65 @@ public class StatsService {
         return new TrendResponseDto("week", points);
     }
 
+    @Cacheable(cacheNames = CacheConfig.CACHE_BREAKDOWN, key = "#groupBy + ':' + #year")
     public BreakdownResponseDto getBreakdown(String groupBy, Integer year) {
         log.info("Serving breakdown query groupBy={} year={}", groupBy, year);
         queriesCounter.increment();
 
         boolean byMonth = "month".equalsIgnoreCase(groupBy);
-
-        List<BreakdownRowDto> rows = new ArrayList<>();
         String[] MONTH_LABELS = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
 
+        List<BreakdownRowDto> rows;
+
         if (byMonth) {
-            String sql =
-                "SELECT EXTRACT(month FROM COALESCE(applied_at, created_at::date))::int AS period_num, " +
-                "  COUNT(*) AS total_applied, " +
-                "  COUNT(*) FILTER (WHERE status = 'REJECTED') AS total_rejected, " +
-                "  COUNT(*) FILTER (WHERE status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS total_open " +
-                "FROM applications_snapshot " +
-                "WHERE user_id=? AND deleted_at IS NULL " +
-                "  AND EXTRACT(year FROM COALESCE(applied_at, created_at::date)) = ? " +
-                "GROUP BY 1 ORDER BY 1";
-
             int targetYear = (year != null) ? year : LocalDate.now().getYear();
-            jdbc.query(sql, (RowCallbackHandler) rs -> {
-                int m = rs.getInt(1);
-                rows.add(new BreakdownRowDto(
-                    MONTH_LABELS[m - 1],
-                    m,
-                    rs.getLong(2),
-                    rs.getLong(3),
-                    rs.getLong(4)
-                ));
-            }, DEMO_USER_ID, targetYear);
 
-            List<BreakdownRowDto> full = new ArrayList<>();
+            // month (1-12) → [totalApplied, totalRejected, totalOpen]
+            Map<Integer, long[]> monthMap = new LinkedHashMap<>();
+            jdbc.query(
+                    "SELECT month, status, cnt FROM agg_monthly WHERE user_id=? AND year=? ORDER BY month",
+                    (RowCallbackHandler) rs -> {
+                        int m = rs.getInt(1);
+                        String status = rs.getString(2);
+                        long cnt = rs.getLong(3);
+                        long[] totals = monthMap.computeIfAbsent(m, k -> new long[3]);
+                        totals[0] += cnt;
+                        if ("REJECTED".equals(status)) totals[1] += cnt;
+                        if (!"REJECTED".equals(status) && !"ACCEPTED".equals(status) && !"WITHDRAWN".equals(status)) totals[2] += cnt;
+                    },
+                    DEMO_USER_ID, targetYear);
+
+            rows = new ArrayList<>(12);
             for (int m = 1; m <= 12; m++) {
-                final int mm = m;
-                BreakdownRowDto found = rows.stream().filter(r -> r.periodNum() == mm).findFirst().orElse(null);
-                full.add(found != null ? found : new BreakdownRowDto(MONTH_LABELS[m - 1], m, 0, 0, 0));
+                long[] t = monthMap.getOrDefault(m, new long[3]);
+                rows.add(new BreakdownRowDto(MONTH_LABELS[m - 1], m, t[0], t[1], t[2]));
             }
 
             OpenWindowsDto windows = queryOpenWindows();
-            return new BreakdownResponseDto("month", targetYear, full, windows);
+            return new BreakdownResponseDto("month", targetYear, rows, windows);
 
         } else {
-            String sql =
-                "SELECT EXTRACT(year FROM COALESCE(applied_at, created_at::date))::int AS period_num, " +
-                "  COUNT(*) AS total_applied, " +
-                "  COUNT(*) FILTER (WHERE status = 'REJECTED') AS total_rejected, " +
-                "  COUNT(*) FILTER (WHERE status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS total_open " +
-                "FROM applications_snapshot " +
-                "WHERE user_id=? AND deleted_at IS NULL " +
-                "GROUP BY 1 ORDER BY 1";
+            // year → [totalApplied, totalRejected, totalOpen]
+            Map<Integer, long[]> yearMap = new LinkedHashMap<>();
+            jdbc.query(
+                    "SELECT year, status, cnt FROM agg_monthly WHERE user_id=? ORDER BY year",
+                    (RowCallbackHandler) rs -> {
+                        int y = rs.getInt(1);
+                        String status = rs.getString(2);
+                        long cnt = rs.getLong(3);
+                        long[] totals = yearMap.computeIfAbsent(y, k -> new long[3]);
+                        totals[0] += cnt;
+                        if ("REJECTED".equals(status)) totals[1] += cnt;
+                        if (!"REJECTED".equals(status) && !"ACCEPTED".equals(status) && !"WITHDRAWN".equals(status)) totals[2] += cnt;
+                    },
+                    DEMO_USER_ID);
 
-            jdbc.query(sql, (RowCallbackHandler) rs -> {
-                int y = rs.getInt(1);
-                rows.add(new BreakdownRowDto(
-                    String.valueOf(y),
-                    y,
-                    rs.getLong(2),
-                    rs.getLong(3),
-                    rs.getLong(4)
-                ));
-            }, DEMO_USER_ID);
+            rows = new ArrayList<>();
+            for (Map.Entry<Integer, long[]> entry : yearMap.entrySet()) {
+                int y = entry.getKey();
+                long[] t = entry.getValue();
+                rows.add(new BreakdownRowDto(String.valueOf(y), y, t[0], t[1], t[2]));
+            }
 
             OpenWindowsDto windows = queryOpenWindows();
             return new BreakdownResponseDto("year", null, rows, windows);
@@ -165,27 +165,50 @@ public class StatsService {
     }
 
     private OpenWindowsDto queryOpenWindows() {
-        String sql =
+        // 7d/15d/30d: day precision — query snapshot directly
+        String snapSql =
             "SELECT " +
             "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= CURRENT_DATE - 7   AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last7d, " +
             "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= CURRENT_DATE - 15  AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last15d, " +
-            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= CURRENT_DATE - 30  AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last30d, " +
-            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= CURRENT_DATE - 92  AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last3m, " +
-            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= CURRENT_DATE - 183 AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last6m, " +
-            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= CURRENT_DATE - 274 AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last9m, " +
-            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= CURRENT_DATE - 365 AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last1y " +
+            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= CURRENT_DATE - 30  AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last30d " +
             "FROM applications_snapshot WHERE user_id=? AND deleted_at IS NULL";
 
-        long[] result = {0, 0, 0, 0, 0, 0, 0};
-        jdbc.query(sql, (RowCallbackHandler) rs -> {
-            result[0] = rs.getLong(1);
-            result[1] = rs.getLong(2);
-            result[2] = rs.getLong(3);
-            result[3] = rs.getLong(4);
-            result[4] = rs.getLong(5);
-            result[5] = rs.getLong(6);
-            result[6] = rs.getLong(7);
+        long[] snapResult = {0, 0, 0};
+        jdbc.query(snapSql, (RowCallbackHandler) rs -> {
+            snapResult[0] = rs.getLong(1);
+            snapResult[1] = rs.getLong(2);
+            snapResult[2] = rs.getLong(3);
         }, DEMO_USER_ID);
-        return new OpenWindowsDto(result[0], result[1], result[2], result[3], result[4], result[5], result[6]);
+
+        // 3m/6m/9m/1y: month precision — query agg_monthly
+        LocalDate today = LocalDate.now();
+        LocalDate cutoff3m = today.minusDays(92);
+        LocalDate cutoff6m = today.minusDays(183);
+        LocalDate cutoff9m = today.minusDays(274);
+        LocalDate cutoff1y = today.minusDays(365);
+
+        int minYear  = cutoff1y.getYear();
+        int minMonth = cutoff1y.getMonthValue();
+
+        long[] aggResult = {0, 0, 0, 0};
+        jdbc.query("""
+                SELECT year, month, SUM(cnt) FROM agg_monthly
+                WHERE user_id=? AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')
+                  AND (year > ? OR (year = ? AND month >= ?))
+                GROUP BY year, month""",
+                (RowCallbackHandler) rs -> {
+                    int y = rs.getInt(1);
+                    int m = rs.getInt(2);
+                    long cnt = rs.getLong(3);
+                    int periodYM = y * 12 + m;
+                    if (periodYM >= cutoff3m.getYear() * 12 + cutoff3m.getMonthValue()) aggResult[0] += cnt;
+                    if (periodYM >= cutoff6m.getYear() * 12 + cutoff6m.getMonthValue()) aggResult[1] += cnt;
+                    if (periodYM >= cutoff9m.getYear() * 12 + cutoff9m.getMonthValue()) aggResult[2] += cnt;
+                    aggResult[3] += cnt; // all rows already satisfy cutoff1y from WHERE clause
+                },
+                DEMO_USER_ID, minYear, minYear, minMonth);
+
+        return new OpenWindowsDto(snapResult[0], snapResult[1], snapResult[2],
+                                  aggResult[0], aggResult[1], aggResult[2], aggResult[3]);
     }
 }

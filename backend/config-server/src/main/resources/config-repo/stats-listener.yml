@@ -4,6 +4,13 @@ spring:
     username: ${DB_USER:jt}
     password: ${DB_PASSWORD:jtpass}
 
+  data:
+    redis:
+      host: redis
+      port: 6379
+      connect-timeout: 2000
+      timeout: 1000
+
   kafka:
     bootstrap-servers: localhost:9092
     consumer:

@@ -3,6 +3,7 @@ package com.jobtracker.statslistener.listener;
 import com.jobtracker.statslistener.event.ApplicationEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -22,9 +23,11 @@ public class ApplicationEventListener {
     private static final Logger log = LoggerFactory.getLogger(ApplicationEventListener.class);
 
     private final JdbcTemplate jdbc;
+    private final StringRedisTemplate redis;
 
-    public ApplicationEventListener(JdbcTemplate jdbc) {
+    public ApplicationEventListener(JdbcTemplate jdbc, StringRedisTemplate redis) {
         this.jdbc = jdbc;
+        this.redis = redis;
     }
 
     @Transactional
@@ -71,10 +74,22 @@ public class ApplicationEventListener {
                 }
                 default -> log.warn("Unknown event type '{}' for id={} — skipping", event.eventType(), event.id());
             }
+            evictStatsCache(event.userId());
             log.debug("Processed event type={} id={}", event.eventType(), event.id());
         } catch (Exception ex) {
             log.error("Failed to process event type={} id={}: {}", event.eventType(), event.id(), ex.getMessage(), ex);
             throw ex; // re-throw so error handler / DLQ kicks in
+        }
+    }
+
+    private void evictStatsCache(UUID userId) {
+        String prefix = userId.toString() + ":";
+        for (String cacheName : new String[]{"stats-summary", "stats-trend", "stats-breakdown"}) {
+            var keys = redis.keys(cacheName + "::" + prefix + "*");
+            if (keys != null && !keys.isEmpty()) {
+                redis.delete(keys);
+                log.debug("Evicted {} keys from cache '{}'", keys.size(), cacheName);
+            }
         }
     }
 

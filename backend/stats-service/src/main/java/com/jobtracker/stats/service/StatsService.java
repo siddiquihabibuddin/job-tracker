@@ -28,7 +28,6 @@ import java.util.*;
 public class StatsService {
 
     private static final Logger log = LoggerFactory.getLogger(StatsService.class);
-    private static final UUID DEMO_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     private final JdbcTemplate jdbc;
@@ -41,27 +40,27 @@ public class StatsService {
                 .register(meterRegistry);
     }
 
-    @Cacheable(cacheNames = CacheConfig.CACHE_SUMMARY, key = "#windowDays")
-    public StatsSummaryDto getSummary(int windowDays) {
-        log.info("Serving summary query windowDays={}", windowDays);
+    @Cacheable(cacheNames = CacheConfig.CACHE_SUMMARY, key = "#userId + ':' + #windowDays")
+    public StatsSummaryDto getSummary(UUID userId, int windowDays) {
+        log.info("Serving summary query userId={} windowDays={}", userId, windowDays);
         queriesCounter.increment();
         String interval = windowDays + " days";
 
         Long total = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM applications_snapshot WHERE user_id=? AND deleted_at IS NULL AND COALESCE(applied_at, created_at::date) >= (NOW() - ?::interval)::date",
-                Long.class, DEMO_USER_ID, interval);
+                Long.class, userId, interval);
 
         Map<String, Long> byStatus = new LinkedHashMap<>();
         jdbc.query(
                 "SELECT status, COUNT(*) FROM applications_snapshot WHERE user_id=? AND deleted_at IS NULL AND COALESCE(applied_at, created_at::date) >= (NOW() - ?::interval)::date GROUP BY status",
                 (RowCallbackHandler) rs -> byStatus.put(rs.getString(1), rs.getLong(2)),
-                DEMO_USER_ID, interval);
+                userId, interval);
 
         Map<String, Long> bySource = new LinkedHashMap<>();
         jdbc.query(
                 "SELECT COALESCE(source, 'Unknown'), COUNT(*) FROM applications_snapshot WHERE user_id=? AND deleted_at IS NULL AND COALESCE(applied_at, created_at::date) >= (NOW() - ?::interval)::date GROUP BY 1",
                 (RowCallbackHandler) rs -> bySource.put(rs.getString(1), rs.getLong(2)),
-                DEMO_USER_ID, interval);
+                userId, interval);
 
         return new StatsSummaryDto(
                 windowDays,
@@ -71,9 +70,9 @@ public class StatsService {
                 OffsetDateTime.now().toString());
     }
 
-    @Cacheable(cacheNames = CacheConfig.CACHE_TREND, key = "#weeks")
-    public TrendResponseDto getTrend(int weeks) {
-        log.info("Serving trend query weeks={}", weeks);
+    @Cacheable(cacheNames = CacheConfig.CACHE_TREND, key = "#userId + ':' + #weeks")
+    public TrendResponseDto getTrend(UUID userId, int weeks) {
+        log.info("Serving trend query userId={} weeks={}", userId, weeks);
         queriesCounter.increment();
 
         LocalDate currentWeekMonday = LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
@@ -86,7 +85,7 @@ public class StatsService {
                     LocalDate weekStart = rs.getObject(1, LocalDate.class);
                     dbResults.put(weekStart, rs.getLong(2));
                 },
-                DEMO_USER_ID, Date.valueOf(windowStart));
+                userId, Date.valueOf(windowStart));
 
         List<TrendPointDto> points = new ArrayList<>(weeks);
         for (int i = weeks - 1; i >= 0; i--) {
@@ -99,9 +98,9 @@ public class StatsService {
         return new TrendResponseDto("week", points);
     }
 
-    @Cacheable(cacheNames = CacheConfig.CACHE_BREAKDOWN, key = "#groupBy + ':' + #year")
-    public BreakdownResponseDto getBreakdown(String groupBy, Integer year) {
-        log.info("Serving breakdown query groupBy={} year={}", groupBy, year);
+    @Cacheable(cacheNames = CacheConfig.CACHE_BREAKDOWN, key = "#userId + ':' + #groupBy + ':' + #year")
+    public BreakdownResponseDto getBreakdown(UUID userId, String groupBy, Integer year) {
+        log.info("Serving breakdown query userId={} groupBy={} year={}", userId, groupBy, year);
         queriesCounter.increment();
 
         boolean byMonth = "month".equalsIgnoreCase(groupBy);
@@ -112,7 +111,6 @@ public class StatsService {
         if (byMonth) {
             int targetYear = (year != null) ? year : LocalDate.now().getYear();
 
-            // month (1-12) → [totalApplied, totalRejected, totalOpen]
             Map<Integer, long[]> monthMap = new LinkedHashMap<>();
             jdbc.query(
                     "SELECT month, status, cnt FROM agg_monthly WHERE user_id=? AND year=? ORDER BY month",
@@ -125,7 +123,7 @@ public class StatsService {
                         if ("REJECTED".equals(status)) totals[1] += cnt;
                         if (!"REJECTED".equals(status) && !"ACCEPTED".equals(status) && !"WITHDRAWN".equals(status)) totals[2] += cnt;
                     },
-                    DEMO_USER_ID, targetYear);
+                    userId, targetYear);
 
             rows = new ArrayList<>(12);
             for (int m = 1; m <= 12; m++) {
@@ -133,11 +131,10 @@ public class StatsService {
                 rows.add(new BreakdownRowDto(MONTH_LABELS[m - 1], m, t[0], t[1], t[2]));
             }
 
-            OpenWindowsDto windows = queryOpenWindows();
+            OpenWindowsDto windows = queryOpenWindows(userId);
             return new BreakdownResponseDto("month", targetYear, rows, windows);
 
         } else {
-            // year → [totalApplied, totalRejected, totalOpen]
             Map<Integer, long[]> yearMap = new LinkedHashMap<>();
             jdbc.query(
                     "SELECT year, status, cnt FROM agg_monthly WHERE user_id=? ORDER BY year",
@@ -150,7 +147,7 @@ public class StatsService {
                         if ("REJECTED".equals(status)) totals[1] += cnt;
                         if (!"REJECTED".equals(status) && !"ACCEPTED".equals(status) && !"WITHDRAWN".equals(status)) totals[2] += cnt;
                     },
-                    DEMO_USER_ID);
+                    userId);
 
             rows = new ArrayList<>();
             for (Map.Entry<Integer, long[]> entry : yearMap.entrySet()) {
@@ -159,13 +156,12 @@ public class StatsService {
                 rows.add(new BreakdownRowDto(String.valueOf(y), y, t[0], t[1], t[2]));
             }
 
-            OpenWindowsDto windows = queryOpenWindows();
+            OpenWindowsDto windows = queryOpenWindows(userId);
             return new BreakdownResponseDto("year", null, rows, windows);
         }
     }
 
-    private OpenWindowsDto queryOpenWindows() {
-        // 7d/15d/30d: day precision — query snapshot directly
+    private OpenWindowsDto queryOpenWindows(UUID userId) {
         String snapSql =
             "SELECT " +
             "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= CURRENT_DATE - 7   AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last7d, " +
@@ -178,9 +174,8 @@ public class StatsService {
             snapResult[0] = rs.getLong(1);
             snapResult[1] = rs.getLong(2);
             snapResult[2] = rs.getLong(3);
-        }, DEMO_USER_ID);
+        }, userId);
 
-        // 3m/6m/9m/1y: month precision — query agg_monthly
         LocalDate today = LocalDate.now();
         LocalDate cutoff3m = today.minusDays(92);
         LocalDate cutoff6m = today.minusDays(183);
@@ -204,9 +199,9 @@ public class StatsService {
                     if (periodYM >= cutoff3m.getYear() * 12 + cutoff3m.getMonthValue()) aggResult[0] += cnt;
                     if (periodYM >= cutoff6m.getYear() * 12 + cutoff6m.getMonthValue()) aggResult[1] += cnt;
                     if (periodYM >= cutoff9m.getYear() * 12 + cutoff9m.getMonthValue()) aggResult[2] += cnt;
-                    aggResult[3] += cnt; // all rows already satisfy cutoff1y from WHERE clause
+                    aggResult[3] += cnt;
                 },
-                DEMO_USER_ID, minYear, minYear, minMonth);
+                userId, minYear, minYear, minMonth);
 
         return new OpenWindowsDto(snapResult[0], snapResult[1], snapResult[2],
                                   aggResult[0], aggResult[1], aggResult[2], aggResult[3]);

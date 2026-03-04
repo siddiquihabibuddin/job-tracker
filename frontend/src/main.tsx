@@ -10,6 +10,7 @@ import ApplicationDetail from './routes/ApplicationDetail'
 import NewApplication from './routes/NewApplication'
 import Profile from './routes/Profile'
 import Login from './routes/Login'
+import Register from './routes/Register'
 import ErrorPage from './routes/ErrorPage'
 import { AuthProvider } from './auth/AuthContext'
 import RequireAuth from './auth/RequireAuth'
@@ -23,6 +24,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="dashboard" replace /> }, // / -> /dashboard
       { path: 'login', element: <Login /> },                         // public
+      { path: 'register', element: <Register /> },
       {
         element: <RequireAuth />,                                    // guard this branch
         children: [

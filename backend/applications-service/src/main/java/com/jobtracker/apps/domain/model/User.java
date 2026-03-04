@@ -27,4 +27,10 @@ public class User extends Auditable {
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
+
+    @Column(name = "display_name")
+    private String displayName;
+
+    public String getDisplayName() { return displayName; }
+    public void setDisplayName(String displayName) { this.displayName = displayName; }
 }

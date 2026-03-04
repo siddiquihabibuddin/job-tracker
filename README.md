@@ -6,17 +6,17 @@ A full-stack job application tracking platform built with a microservices archit
 
 ## Screenshots
 
-| Login | Dashboard |
+| Login | Register |
 |---|---|
-| ![Login](docs/screenshots/login.png) | ![Dashboard](docs/screenshots/dashboard.png) |
+| ![Login](docs/screenshots/login.png) | ![Register](docs/screenshots/register.png) |
 
-| Applications | Application Detail |
+| Dashboard | Applications |
 |---|---|
-| ![Applications](docs/screenshots/applications.png) | ![Application Detail](docs/screenshots/view-application.png) |
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Applications](docs/screenshots/applications.png) |
 
-| New Application |
-|---|
-| ![New Application](docs/screenshots/new-application.png) |
+| Application Detail | New Application |
+|---|---|
+| ![Application Detail](docs/screenshots/view-application.png) | ![New Application](docs/screenshots/new-application.png) |
 
 ---
 
@@ -120,13 +120,14 @@ This is the **Transactional Outbox Pattern** — Kafka being down never causes d
 
 ## Features
 
-- **JWT Authentication** — HS256 token-based auth, enforced by Spring Security on all services
+- **User registration & login** — `POST /v1/auth/register` creates a new account (BCrypt-hashed password, immediate JWT); `POST /v1/auth/token` authenticates existing users; all credentials stored in the `users` table — no hardcoded demo users
+- **JWT Authentication** — HS256 token-based auth, enforced by Spring Security on all services; each user sees only their own data
 - **Full CRUD** — Create, read, update, and soft-delete job applications with rich fields: apply date, salary range, job link, call received, reject date, resume, login details, notes
 - **CSV Import** — Bulk import applications from a spreadsheet export; handles quoted commas, multiple date formats, salary parsing (`$50K`, `50,000–80,000`), and flexible status mapping (`Open` → APPLIED, `Closed` → REJECTED, Open + Call → PHONE)
 - **Advanced filtering** — Filter applications by status, search (company/role), month, year, and call received; sort by apply date or date added; page-based pagination (20 per page)
 - **Analytics Dashboard** — By Month / By Year toggle with grouped Applied vs Rejected bar chart, summary table, and 7 open-window KPI cards (last 7d / 15d / 30d / 3mo / 6mo / 9mo / 1yr)
 - **Pre-computed aggregate tables** — `agg_monthly` and `agg_weekly` in `jt_stats` are maintained in-sync by stats-listener (recomputed atomically on every Kafka event); stats-service reads from these tables with indexed scans instead of live GROUP BY on the raw snapshot
-- **Redis caching** — All three stats endpoints (`/summary`, `/trend`, `/breakdown`) are cached in Redis with a 5-minute TTL; per-type `Jackson2JsonRedisSerializer` handles Java record serialization correctly
+- **Redis caching** — All three stats endpoints (`/summary`, `/trend`, `/breakdown`) are cached in Redis with a 5-minute TTL, keyed per-user; the stats-listener evicts the affected user's cache keys immediately after processing each Kafka event, so the dashboard always reflects the latest data
 - **Idempotent writes** — All POST/PATCH endpoints require an `Idempotency-Key` header
 - **Soft deletes** — Applications are logically deleted (`deleted_at` timestamp); all queries filter accordingly
 - **Transactional Outbox Pattern** — Events are written to `outbox_events` in the same DB transaction as the application save; a scheduled poller publishes them to Kafka, guaranteeing no event loss even if Kafka is temporarily unavailable
@@ -145,10 +146,16 @@ This is the **Transactional Outbox Pattern** — Kafka being down never causes d
 ### Authentication
 
 ```
+POST /v1/auth/register
+Body:     { "email": "you@example.com", "password": "••••••••", "displayName": "Your Name" }
+Response: 201 { "token": "eyJ...", "email": "...", "userId": "...", "displayName": "..." }
+
 POST /v1/auth/token
-Body: { "email": "demo@example.com", "password": "demo" }
-Response: { "token": "eyJ...", "email": "...", "userId": "..." }
+Body:     { "email": "you@example.com", "password": "••••••••" }
+Response: 200 { "token": "eyJ...", "email": "...", "userId": "...", "displayName": "..." }
 ```
+
+Passwords are BCrypt-hashed (strength 10). Emails are normalised to lowercase before storage and lookup. Duplicate email registration returns `409 { "error": "Email already registered" }`. Invalid credentials return `401 { "error": "Invalid credentials" }` (same message for all failure branches to prevent user enumeration).
 
 ### Applications
 
@@ -238,9 +245,11 @@ npm run dev
 # Available at http://localhost:5173
 ```
 
-### 4. Log in
+### 4. Log in or create an account
 
-Use the demo credentials: **email:** `demo@example.com` | **password:** `demo`
+Navigate to `http://localhost:5173/register` to create a new account, or sign in at `/login`.
+
+A demo account is pre-seeded: **email:** `demo@example.com` | **password:** `demo`
 
 ---
 
@@ -263,7 +272,7 @@ JobTracker/
     ├── src/
     │   ├── api/                # Axios clients + typed API functions
     │   ├── auth/               # AuthContext + RequireAuth route guard
-    │   ├── routes/             # Login, Dashboard, Applications, Detail, Profile
+    │   ├── routes/             # Login, Register, Dashboard, Applications, Detail, Profile
     │   └── main.tsx            # App entry + ErrorBoundary
     ├── .env                    # Local dev environment variables
     └── package.json
@@ -275,7 +284,7 @@ JobTracker/
 
 **`jt_apps`** (write database)
 
-- `users` — registered users
+- `users` — registered users with BCrypt-hashed passwords and optional display name
 - `applications` — job applications with JSONB tags, salary range, soft-delete, and extended fields: `applied_at`, `job_link`, `resume_uploaded`, `got_call`, `reject_date`, `login_details`
 - `application_status_history` — full audit trail of status transitions
 - `application_notes` — notes per application

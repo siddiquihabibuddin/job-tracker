@@ -6,7 +6,15 @@ type AuthContextType = {
   user: User | null
   token: string | null
   signIn: (email: string, password: string) => Promise<void>
+  signUp: (email: string, password: string, displayName?: string) => Promise<void>
   signOut: () => void
+}
+
+interface AuthApiResponse {
+  token: string
+  email: string
+  userId: string
+  displayName: string | null
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -37,16 +45,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     else sessionStorage.removeItem('jt_token')
   }
 
+  function handleAuthResponse(data: AuthApiResponse) {
+    const name = data.displayName ?? data.email.split('@')[0]
+    persist({ id: data.userId, email: data.email, name }, data.token)
+  }
+
   const value = useMemo<AuthContextType>(() => ({
     user,
     token,
     async signIn(email: string, password: string) {
-      const res = await httpApps.post<{ token: string; email: string; userId: string }>(
-        '/auth/token',
-        { email, password }
-      )
-      const { token: t, email: e, userId } = res.data
-      persist({ id: userId, email: e, name: e.split('@')[0] }, t)
+      const res = await httpApps.post<AuthApiResponse>('/auth/token', { email, password })
+      handleAuthResponse(res.data)
+    },
+    async signUp(email: string, password: string, displayName?: string) {
+      const res = await httpApps.post<AuthApiResponse>('/auth/register', { email, password, displayName })
+      handleAuthResponse(res.data)
     },
     signOut() {
       persist(null, null)

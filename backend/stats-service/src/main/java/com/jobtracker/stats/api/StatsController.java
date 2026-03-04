@@ -6,11 +6,16 @@ import com.jobtracker.stats.api.dto.TrendResponseDto;
 import com.jobtracker.stats.service.StatsService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/stats")
@@ -29,21 +34,30 @@ public class StatsController {
         if (days < 1 || days > 365) {
             throw new IllegalArgumentException("window must be between 1d and 365d");
         }
-        return svc.getSummary(days);
+        return svc.getSummary(currentUserId(), days);
     }
 
     @GetMapping("/trend")
     public TrendResponseDto trend(
             @RequestParam(defaultValue = "week") String period,
             @RequestParam(defaultValue = "12") @Min(1) @Max(52) int weeks) {
-        return svc.getTrend(weeks);
+        return svc.getTrend(currentUserId(), weeks);
     }
 
     @GetMapping("/breakdown")
     public BreakdownResponseDto breakdown(
             @RequestParam(defaultValue = "month") String groupBy,
             @RequestParam(required = false) Integer year) {
-        return svc.getBreakdown(groupBy, year);
+        return svc.getBreakdown(currentUserId(), groupBy, year);
+    }
+
+    private UUID currentUserId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
+            String sub = jwt.getSubject();
+            if (sub != null) return UUID.fromString(sub);
+        }
+        throw new IllegalStateException("No authenticated user");
     }
 
     private int parseWindowDays(String window) {

@@ -227,7 +227,7 @@ docker compose up
 ```
 
 Docker startup order is automatically enforced:
-`postgres + kafka + config-server` → `applications-service + stats-service + stats-listener` → `api-gateway`
+`postgres + kafka + redis + config-server` → `applications-service + stats-service + stats-listener` → `api-gateway`
 
 ### 3. Start the frontend
 
@@ -251,8 +251,8 @@ JobTracker/
 ├── backend/
 │   ├── api-gateway/            # Spring Cloud Gateway (WebFlux)
 │   ├── applications-service/   # Write service — JPA, Kafka producer
-│   ├── stats-service/          # Read service — JdbcTemplate analytics
-│   ├── stats-listener/         # Kafka consumer — snapshot upserts
+│   ├── stats-service/          # Read service — agg table queries, Redis-cached responses
+│   ├── stats-listener/         # Kafka consumer — snapshot upserts + agg table maintenance
 │   ├── config-server/          # Spring Cloud Config Server
 │   ├── docker-compose.yml      # Full infrastructure definition
 │   ├── init-db.sql             # Creates jt_stats DB (runs on fresh volume)

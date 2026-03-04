@@ -73,6 +73,9 @@ export default function Applications() {
   // reset to page 0 when filters change
   useEffect(() => { setPage(0) }, [status, search, month, year, gotCall, sortBy])
 
+  // clear selection when page or filters change
+  useEffect(() => { setSelected(new Set()) }, [status, search, month, year, gotCall, sortBy, page])
+
   const debouncedSearch = useDebounce(search, 300)
 
   const [rows, setRows] = useState<Application[]>([])
@@ -83,6 +86,8 @@ export default function Applications() {
   const [loadKey, setLoadKey] = useState(0)
 
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
   // CSV import state
@@ -148,6 +153,23 @@ export default function Applications() {
     }
   }
 
+  async function handleBulkDelete() {
+    const ids = Array.from(selected)
+    if (!confirm(`Delete ${ids.length} application${ids.length > 1 ? 's' : ''}?`)) return
+    setBulkDeleting(true)
+    try {
+      await Promise.all(ids.map(id => USE_MOCK ? mockDelete(id) : apiDelete(id)))
+      setRows(prev => prev.filter(r => !selected.has(r.id)))
+      setSelected(new Set())
+      setToast(`Deleted ${ids.length} application${ids.length > 1 ? 's' : ''}`)
+      setTimeout(() => setToast(null), 2500)
+    } catch {
+      alert('One or more deletions failed')
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   function openImportModal() {
     setImportFile(null); setImportResult(null); setImportError(null); setShowImport(true)
   }
@@ -206,6 +228,16 @@ export default function Applications() {
           </small>}
         </h2>
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '.4rem' }}>
+          {selected.size > 0 && (
+            <button
+              type="button"
+              style={{ padding: '4px 10px', fontSize: '0.8rem', marginBottom: 0, background: '#ef4444', border: 'none', color: '#fff' }}
+              disabled={bulkDeleting}
+              onClick={handleBulkDelete}
+            >
+              {bulkDeleting ? 'Deleting…' : `Delete ${selected.size} selected`}
+            </button>
+          )}
           <div style={{ position: 'relative', display: 'inline-flex' }} className="csv-tooltip-wrap">
             <button type="button" style={{ padding: '4px 10px', fontSize: '0.8rem', marginBottom: 0 }} onClick={openImportModal}>Import CSV</button>
             <div className="csv-tooltip">
@@ -364,6 +396,14 @@ export default function Applications() {
             <table style={{ fontSize: '0.78rem', width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
+                  <th style={{ ...thStyle, width: '2rem' }}>
+                    <input
+                      type="checkbox"
+                      style={{ margin: 0 }}
+                      checked={rows.length > 0 && rows.every(r => selected.has(r.id))}
+                      onChange={e => setSelected(e.target.checked ? new Set(rows.map(r => r.id)) : new Set())}
+                    />
+                  </th>
                   <th style={thStyle}>Company</th>
                   <th style={thStyle}>Role</th>
                   <th style={thStyle}>Status</th>
@@ -377,6 +417,18 @@ export default function Applications() {
               <tbody>
                 {rows.map(r => (
                   <tr key={r.id}>
+                    <td style={{ ...cellStyle, maxWidth: 'none' }}>
+                      <input
+                        type="checkbox"
+                        style={{ margin: 0 }}
+                        checked={selected.has(r.id)}
+                        onChange={e => setSelected(prev => {
+                          const next = new Set(prev)
+                          e.target.checked ? next.add(r.id) : next.delete(r.id)
+                          return next
+                        })}
+                      />
+                    </td>
                     <td style={{ ...cellStyle, fontWeight: 500 }}>{r.company}</td>
                     <td style={roleCell}>{r.role}</td>
                     <td style={{ ...cellStyle, maxWidth: 'none' }}><StatusBadge status={r.status} /></td>
@@ -403,7 +455,7 @@ export default function Applications() {
                   </tr>
                 ))}
                 {rows.length === 0 && (
-                  <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--pico-muted-color)' }}>No results</td></tr>
+                  <tr><td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: 'var(--pico-muted-color)' }}>No results</td></tr>
                 )}
               </tbody>
             </table>

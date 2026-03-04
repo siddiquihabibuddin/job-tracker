@@ -76,29 +76,27 @@ public class ApplicationService {
         Pageable pageable = PageRequest.of(Math.max(0, page), Math.min(100, Math.max(1, limit)), Sort.by(Sort.Direction.DESC, sortField));
         UUID userId = currentUserId();
 
-        Specification<Application> spec = buildSpec(userId, status, month, year, gotCall);
+        Specification<Application> spec = buildSpec(userId, status, search, month, year, gotCall);
         Page<Application> p = appRepo.findAll(spec, pageable);
 
-        // simple search in-memory (company/role) for MVP
-        var items = p.getContent().stream()
-                .filter(a -> {
-                    if (search == null || search.isBlank()) return true;
-                    var q = search.toLowerCase();
-                    return (a.getCompany() != null && a.getCompany().toLowerCase().contains(q))
-                            || (a.getRole() != null && a.getRole().toLowerCase().contains(q));
-                })
-                .map(mapper::toDto)
-                .toList();
+        var items = p.getContent().stream().map(mapper::toDto).toList();
 
         return new PageResponse<>(items, pageable.getPageSize(), p.getTotalElements(), p.getTotalPages(), p.getNumber());
     }
 
-    private Specification<Application> buildSpec(UUID userId, String status, Integer month, Integer year, Boolean gotCall) {
+    private Specification<Application> buildSpec(UUID userId, String status, String search, Integer month, Integer year, Boolean gotCall) {
         return (root, query, cb) -> {
             var predicates = new java.util.ArrayList<Predicate>();
             predicates.add(cb.equal(root.get("user").get("id"), userId));
             predicates.add(cb.isNull(root.get("deletedAt")));
 
+            if (search != null && !search.isBlank()) {
+                String pattern = "%" + search.toLowerCase() + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("company")), pattern),
+                        cb.like(cb.lower(root.get("role")), pattern)
+                ));
+            }
             if (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status)) {
                 predicates.add(cb.equal(root.get("status"), AppStatus.valueOf(status.toUpperCase())));
             }

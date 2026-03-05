@@ -82,6 +82,7 @@ export default function Dashboard() {
       {/* Open Windows KPI cards */}
       <div className="grid" style={{ marginBottom: '0.5rem' }}>
         {[
+          { label: 'Today',    value: windows?.today   ?? 0 },
           { label: 'Last 7d',  value: windows?.last7d  ?? 0 },
           { label: 'Last 15d', value: windows?.last15d ?? 0 },
           { label: 'Last 30d', value: windows?.last30d ?? 0 },

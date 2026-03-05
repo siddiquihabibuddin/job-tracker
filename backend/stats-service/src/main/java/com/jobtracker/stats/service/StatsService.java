@@ -231,16 +231,18 @@ public class StatsService {
     private OpenWindowsDto queryOpenWindows(UUID userId) {
         String snapSql =
             "SELECT " +
+            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) = CURRENT_DATE) AS today, " +
             "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= CURRENT_DATE - 7   AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last7d, " +
             "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= CURRENT_DATE - 15  AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last15d, " +
             "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= CURRENT_DATE - 30  AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last30d " +
             "FROM applications_snapshot WHERE user_id=? AND deleted_at IS NULL";
 
-        long[] snapResult = {0, 0, 0};
+        long[] snapResult = {0, 0, 0, 0};
         jdbc.query(snapSql, (RowCallbackHandler) rs -> {
             snapResult[0] = rs.getLong(1);
             snapResult[1] = rs.getLong(2);
             snapResult[2] = rs.getLong(3);
+            snapResult[3] = rs.getLong(4);
         }, userId);
 
         LocalDate today = LocalDate.now();
@@ -270,7 +272,7 @@ public class StatsService {
                 },
                 userId, minYear, minYear, minMonth);
 
-        return new OpenWindowsDto(snapResult[0], snapResult[1], snapResult[2],
+        return new OpenWindowsDto(snapResult[0], snapResult[1], snapResult[2], snapResult[3],
                                   aggResult[0], aggResult[1], aggResult[2], aggResult[3]);
     }
 }

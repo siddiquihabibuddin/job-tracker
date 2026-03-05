@@ -33,6 +33,7 @@ export interface BreakdownRow {
 }
 
 export interface OpenWindows {
+  today: number
   last7d: number
   last15d: number
   last30d: number

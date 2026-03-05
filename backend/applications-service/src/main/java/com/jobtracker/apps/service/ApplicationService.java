@@ -162,6 +162,7 @@ public class ApplicationService {
                 currentUserId(),
                 saved.getStatus().name(),
                 saved.getSource(),
+                saved.getRole(),
                 saved.getCreatedAt(),
                 null,
                 OffsetDateTime.now(),
@@ -210,12 +211,33 @@ public class ApplicationService {
                 currentUserId(),
                 a.getStatus().name(),
                 a.getSource(),
+                a.getRole(),
                 a.getCreatedAt(),
                 a.getDeletedAt(),
                 OffsetDateTime.now(),
                 a.getAppliedAt())));
 
         return mapper.toDto(a);
+    }
+
+    @Transactional
+    public void resyncStats() {
+        UUID userId = currentUserId();
+        Specification<Application> spec = (root, query, cb) -> cb.and(
+                cb.equal(root.get("user").get("id"), userId),
+                cb.isNull(root.get("deletedAt"))
+        );
+        appRepo.findAll(spec).forEach(a -> outboxRepo.save(toOutboxEvent(new ApplicationEvent(
+                "APPLICATION_UPDATED",
+                a.getId(),
+                userId,
+                a.getStatus().name(),
+                a.getSource(),
+                a.getRole(),
+                a.getCreatedAt(),
+                null,
+                OffsetDateTime.now(),
+                a.getAppliedAt()))));
     }
 
     @Transactional
@@ -230,6 +252,7 @@ public class ApplicationService {
                 currentUserId(),
                 a.getStatus().name(),
                 a.getSource(),
+                a.getRole(),
                 a.getCreatedAt(),
                 a.getDeletedAt(),
                 OffsetDateTime.now(),

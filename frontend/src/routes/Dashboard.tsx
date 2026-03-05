@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
-import { getBreakdown, type BreakdownResponse } from '../api/stats'
+import { getBreakdown, getRoleCounts, type BreakdownResponse, type RoleCountsResponse } from '../api/stats'
 
 const USE_MOCK = (import.meta.env.VITE_USE_MOCK ?? 'true') === 'true'
 const CURRENT_YEAR = new Date().getFullYear()
@@ -12,23 +12,32 @@ export default function Dashboard() {
   const [groupBy, setGroupBy] = useState<'month' | 'year'>('month')
   const [year, setYear] = useState(CURRENT_YEAR)
   const [data, setData] = useState<BreakdownResponse | null>(null)
+  const [roleData, setRoleData] = useState<RoleCountsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  const fetchData = (signal?: AbortSignal) => {
     if (USE_MOCK) { setLoading(false); return }
-    let alive = true
     setLoading(true); setError(null)
-    getBreakdown(groupBy, groupBy === 'month' ? year : undefined)
-      .then(d => { if (alive) { setData(d); setLoading(false) } })
+    const yearParam = groupBy === 'month' ? year : undefined
+    Promise.all([
+      getBreakdown(groupBy, yearParam),
+      getRoleCounts(groupBy, yearParam),
+    ])
+      .then(([d, r]) => { if (!signal?.aborted) { setData(d); setRoleData(r); setLoading(false) } })
       .catch((e: unknown) => {
-        if (alive) {
+        if (!signal?.aborted) {
           setError(e instanceof Error ? e.message : 'Failed to load')
           setLoading(false)
         }
       })
-    return () => { alive = false }
-  }, [groupBy, year])
+  }
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetchData(controller.signal)
+    return () => controller.abort()
+  }, [groupBy, year]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const windows = data?.openWindows
   const rows = data?.rows ?? []
@@ -144,6 +153,71 @@ export default function Dashboard() {
               </tbody>
             </table>
           </article>
+
+          {/* Role breakdown */}
+          {roleData && (() => {
+            const roleRows = roleData.rows
+            const totals = roleRows.reduce(
+              (acc, r) => ({ eng: acc.eng + r.engineerDev, mgr: acc.mgr + r.manager, arc: acc.arc + r.architect, oth: acc.oth + r.other }),
+              { eng: 0, mgr: 0, arc: 0, oth: 0 }
+            )
+            const hasAnyRole = totals.eng + totals.mgr + totals.arc + totals.oth > 0
+            return (
+              <>
+                <h3 style={{ fontSize: '0.88rem', fontWeight: 600, margin: '1.5rem 0 0.5rem' }}>
+                  Role Breakdown {groupBy === 'month' ? `(${year})` : '(all years)'}
+                </h3>
+
+                {/* Role KPI totals */}
+                <div className="grid" style={{ marginBottom: '0.5rem' }}>
+                  {[
+                    { label: 'Eng / Dev',  value: totals.eng, color: '#6366f1' },
+                    { label: 'Manager',    value: totals.mgr, color: '#f59e0b' },
+                    { label: 'Architect',  value: totals.arc, color: '#10b981' },
+                    { label: 'Other',      value: totals.oth, color: '#6b7280' },
+                  ].map(({ label, value, color }) => (
+                    <article key={label} style={{ textAlign: 'center', padding: '0.6rem 0.5rem' }}>
+                      <div style={{ fontSize: '0.68rem', color: 'var(--pico-muted-color)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.2rem' }}>{label}</div>
+                      <div style={{ fontSize: '1.8rem', fontWeight: 700, lineHeight: 1, color }}>{value}</div>
+                    </article>
+                  ))}
+                </div>
+
+                {/* Role breakdown table */}
+                <article style={{ padding: '0' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                    <thead>
+                      <tr>
+                        <th style={thStyle}>{groupBy === 'month' ? 'Month' : 'Year'}</th>
+                        <th style={{ ...thStyle, textAlign: 'right', color: '#6366f1' }}>Eng / Dev</th>
+                        <th style={{ ...thStyle, textAlign: 'right', color: '#f59e0b' }}>Manager</th>
+                        <th style={{ ...thStyle, textAlign: 'right', color: '#10b981' }}>Architect</th>
+                        <th style={{ ...thStyle, textAlign: 'right', color: '#6b7280' }}>Other</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {roleRows.filter(r => r.engineerDev > 0 || r.manager > 0 || r.architect > 0 || r.other > 0).map(r => (
+                        <tr key={r.periodNum}>
+                          <td style={tdStyle}>{r.label}</td>
+                          <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 500 }}>{r.engineerDev}</td>
+                          <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 500 }}>{r.manager}</td>
+                          <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 500 }}>{r.architect}</td>
+                          <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 500 }}>{r.other}</td>
+                        </tr>
+                      ))}
+                      {!hasAnyRole && (
+                        <tr>
+                          <td colSpan={5} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--pico-muted-color)' }}>
+                            No data for this period
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </article>
+              </>
+            )
+          })()}
         </>
       )}
     </>

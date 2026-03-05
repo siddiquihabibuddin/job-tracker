@@ -6,6 +6,7 @@ import com.jobtracker.apps.service.CsvImportService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -82,6 +83,13 @@ public class ApplicationsController {
     @PatchMapping("/{appId}/notes/{noteId}")
     public NoteDto updateNote(@PathVariable UUID appId, @PathVariable Long noteId, @Valid @RequestBody UpdateNoteRequest req) {
         return svc.updateNote(appId, noteId, req);
+    }
+
+    // Resync stats snapshot from live application data
+    @PostMapping("/resync-stats")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void resyncStats() {
+        svc.resyncStats();
     }
 
     // CSV import

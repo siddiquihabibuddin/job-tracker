@@ -55,3 +55,25 @@ export async function getBreakdown(groupBy: 'month' | 'year', year?: number): Pr
   const res = await httpStats.get<BreakdownResponse>('/stats/breakdown', { params })
   return res.data
 }
+
+export interface RoleCountRow {
+  label: string
+  periodNum: number
+  engineerDev: number
+  manager: number
+  architect: number
+  other: number
+}
+
+export interface RoleCountsResponse {
+  groupBy: 'month' | 'year'
+  year: number | null
+  rows: RoleCountRow[]
+}
+
+export async function getRoleCounts(groupBy: 'month' | 'year', year?: number): Promise<RoleCountsResponse> {
+  const params: Record<string, string> = { groupBy }
+  if (year !== undefined) params.year = String(year)
+  const res = await httpStats.get<RoleCountsResponse>('/stats/roles', { params })
+  return res.data
+}

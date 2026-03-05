@@ -9,6 +9,7 @@ public record ApplicationEvent(
         UUID userId,
         String status,
         String source,
+        String role,
         OffsetDateTime createdAt,
         OffsetDateTime deletedAt,
         OffsetDateTime occurredAt,

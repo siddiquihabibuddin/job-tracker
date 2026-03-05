@@ -3,6 +3,8 @@ package com.jobtracker.stats.service;
 import com.jobtracker.stats.api.dto.BreakdownResponseDto;
 import com.jobtracker.stats.api.dto.BreakdownRowDto;
 import com.jobtracker.stats.api.dto.OpenWindowsDto;
+import com.jobtracker.stats.api.dto.RoleCountRowDto;
+import com.jobtracker.stats.api.dto.RoleCountsResponseDto;
 import com.jobtracker.stats.api.dto.StatsSummaryDto;
 import com.jobtracker.stats.api.dto.TrendPointDto;
 import com.jobtracker.stats.api.dto.TrendResponseDto;
@@ -158,6 +160,71 @@ public class StatsService {
 
             OpenWindowsDto windows = queryOpenWindows(userId);
             return new BreakdownResponseDto("year", null, rows, windows);
+        }
+    }
+
+    @Cacheable(cacheNames = CacheConfig.CACHE_ROLES, key = "#userId + ':' + #groupBy + ':' + #year")
+    public RoleCountsResponseDto getRoleCounts(UUID userId, String groupBy, Integer year) {
+        log.info("Serving role counts query userId={} groupBy={} year={}", userId, groupBy, year);
+        queriesCounter.increment();
+
+        boolean byMonth = "month".equalsIgnoreCase(groupBy);
+        String[] MONTH_LABELS = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
+
+        List<RoleCountRowDto> rows;
+
+        if (byMonth) {
+            int targetYear = (year != null) ? year : LocalDate.now().getYear();
+
+            Map<Integer, long[]> monthMap = new LinkedHashMap<>();
+            jdbc.query(
+                    "SELECT month, category, cnt FROM agg_role WHERE user_id=? AND year=? ORDER BY month",
+                    (RowCallbackHandler) rs -> {
+                        int m = rs.getInt(1);
+                        String category = rs.getString(2);
+                        long cnt = rs.getLong(3);
+                        long[] totals = monthMap.computeIfAbsent(m, k -> new long[4]);
+                        switch (category) {
+                            case "ENGINEER_DEV" -> totals[0] += cnt;
+                            case "MANAGER"      -> totals[1] += cnt;
+                            case "ARCHITECT"    -> totals[2] += cnt;
+                            default             -> totals[3] += cnt;
+                        }
+                    },
+                    userId, targetYear);
+
+            rows = new ArrayList<>(12);
+            for (int m = 1; m <= 12; m++) {
+                long[] t = monthMap.getOrDefault(m, new long[4]);
+                rows.add(new RoleCountRowDto(MONTH_LABELS[m - 1], m, t[0], t[1], t[2], t[3]));
+            }
+            return new RoleCountsResponseDto("month", targetYear, rows);
+
+        } else {
+            Map<Integer, long[]> yearMap = new LinkedHashMap<>();
+            jdbc.query(
+                    "SELECT year, category, cnt FROM agg_role WHERE user_id=? ORDER BY year",
+                    (RowCallbackHandler) rs -> {
+                        int y = rs.getInt(1);
+                        String category = rs.getString(2);
+                        long cnt = rs.getLong(3);
+                        long[] totals = yearMap.computeIfAbsent(y, k -> new long[4]);
+                        switch (category) {
+                            case "ENGINEER_DEV" -> totals[0] += cnt;
+                            case "MANAGER"      -> totals[1] += cnt;
+                            case "ARCHITECT"    -> totals[2] += cnt;
+                            default             -> totals[3] += cnt;
+                        }
+                    },
+                    userId);
+
+            rows = new ArrayList<>();
+            for (Map.Entry<Integer, long[]> entry : yearMap.entrySet()) {
+                int y = entry.getKey();
+                long[] t = entry.getValue();
+                rows.add(new RoleCountRowDto(String.valueOf(y), y, t[0], t[1], t[2], t[3]));
+            }
+            return new RoleCountsResponseDto("year", null, rows);
         }
     }
 

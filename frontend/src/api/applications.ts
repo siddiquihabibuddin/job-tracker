@@ -111,6 +111,10 @@ export async function deleteApplication(id: string): Promise<void> {
   })
 }
 
+export async function resyncStats(): Promise<void> {
+  await httpApps.post('/applications/resync-stats')
+}
+
 export async function importCsv(file: File): Promise<CsvImportResult> {
   const formData = new FormData()
   formData.append('file', file)

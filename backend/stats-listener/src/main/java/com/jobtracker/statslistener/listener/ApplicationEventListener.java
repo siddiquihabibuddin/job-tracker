@@ -38,28 +38,31 @@ public class ApplicationEventListener {
             switch (event.eventType()) {
                 case "APPLICATION_CREATED" -> {
                     jdbc.update(
-                            "INSERT INTO applications_snapshot (id, user_id, status, source, created_at, deleted_at, applied_at) " +
-                            "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING",
+                            "INSERT INTO applications_snapshot (id, user_id, status, source, created_at, deleted_at, applied_at, role) " +
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING",
                             event.id(), event.userId(), event.status(), event.source(),
-                            toTs(event.createdAt()), toTs(event.deletedAt()), event.appliedAt());
+                            toTs(event.createdAt()), toTs(event.deletedAt()), event.appliedAt(), event.role());
                     LocalDate newDate = effectiveDate(event.appliedAt(), event.createdAt());
                     recomputeMonthly(event.userId(), newDate.getYear(), newDate.getMonthValue());
                     recomputeWeekly(event.userId(), newDate);
+                    recomputeRole(event.userId(), newDate.getYear(), newDate.getMonthValue());
                 }
                 case "APPLICATION_UPDATED" -> {
                     LocalDate oldDate = readEffectiveDate(event.id());
                     jdbc.update(
-                            "INSERT INTO applications_snapshot (id, user_id, status, source, created_at, deleted_at, applied_at) " +
-                            "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE " +
-                            "SET status = EXCLUDED.status, source = EXCLUDED.source, deleted_at = EXCLUDED.deleted_at, applied_at = EXCLUDED.applied_at",
+                            "INSERT INTO applications_snapshot (id, user_id, status, source, created_at, deleted_at, applied_at, role) " +
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE " +
+                            "SET status = EXCLUDED.status, source = EXCLUDED.source, deleted_at = EXCLUDED.deleted_at, applied_at = EXCLUDED.applied_at, role = EXCLUDED.role",
                             event.id(), event.userId(), event.status(), event.source(),
-                            toTs(event.createdAt()), toTs(event.deletedAt()), event.appliedAt());
+                            toTs(event.createdAt()), toTs(event.deletedAt()), event.appliedAt(), event.role());
                     LocalDate newDate = effectiveDate(event.appliedAt(), event.createdAt());
                     recomputeMonthly(event.userId(), newDate.getYear(), newDate.getMonthValue());
                     recomputeWeekly(event.userId(), newDate);
+                    recomputeRole(event.userId(), newDate.getYear(), newDate.getMonthValue());
                     if (oldDate != null && !oldDate.equals(newDate)) {
                         recomputeMonthly(event.userId(), oldDate.getYear(), oldDate.getMonthValue());
                         recomputeWeekly(event.userId(), oldDate);
+                        recomputeRole(event.userId(), oldDate.getYear(), oldDate.getMonthValue());
                     }
                 }
                 case "APPLICATION_DELETED" -> {
@@ -70,6 +73,7 @@ public class ApplicationEventListener {
                     if (oldDate != null) {
                         recomputeMonthly(event.userId(), oldDate.getYear(), oldDate.getMonthValue());
                         recomputeWeekly(event.userId(), oldDate);
+                        recomputeRole(event.userId(), oldDate.getYear(), oldDate.getMonthValue());
                     }
                 }
                 default -> log.warn("Unknown event type '{}' for id={} — skipping", event.eventType(), event.id());
@@ -84,7 +88,7 @@ public class ApplicationEventListener {
 
     private void evictStatsCache(UUID userId) {
         String prefix = userId.toString() + ":";
-        for (String cacheName : new String[]{"stats-summary", "stats-trend", "stats-breakdown"}) {
+        for (String cacheName : new String[]{"stats-summary", "stats-trend", "stats-breakdown", "stats-roles"}) {
             var keys = redis.keys(cacheName + "::" + prefix + "*");
             if (keys != null && !keys.isEmpty()) {
                 redis.delete(keys);
@@ -129,6 +133,28 @@ public class ApplicationEventListener {
                   AND date_trunc('week', COALESCE(applied_at, created_at::date))::date=?
                 GROUP BY 1,2""",
                 userId, Date.valueOf(weekStart));
+    }
+
+    private void recomputeRole(UUID userId, int year, int month) {
+        jdbc.update("DELETE FROM agg_role WHERE user_id=? AND year=? AND month=?", userId, year, month);
+        jdbc.update("""
+                INSERT INTO agg_role (user_id, year, month, category, cnt)
+                SELECT user_id,
+                       EXTRACT(year  FROM COALESCE(applied_at, created_at::date))::smallint,
+                       EXTRACT(month FROM COALESCE(applied_at, created_at::date))::smallint,
+                       CASE
+                           WHEN role ILIKE '%engineer%' OR role ILIKE '%developer%' OR role ILIKE '%dev%' THEN 'ENGINEER_DEV'
+                           WHEN role ILIKE '%manager%'  OR role ILIKE '%mgr%'                            THEN 'MANAGER'
+                           WHEN role ILIKE '%architect%'                                                  THEN 'ARCHITECT'
+                           ELSE 'OTHER'
+                       END,
+                       COUNT(*)
+                FROM applications_snapshot
+                WHERE user_id=? AND deleted_at IS NULL
+                  AND EXTRACT(year  FROM COALESCE(applied_at, created_at::date))=?
+                  AND EXTRACT(month FROM COALESCE(applied_at, created_at::date))=?
+                GROUP BY 1,2,3,4""",
+                userId, year, month);
     }
 
     private LocalDate effectiveDate(LocalDate appliedAt, OffsetDateTime createdAt) {

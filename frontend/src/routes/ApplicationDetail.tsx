@@ -14,7 +14,10 @@ const STATUSES: AppStatus[] = ['APPLIED', 'PHONE', 'ONSITE', 'OFFER', 'REJECTED'
 function formatDate(iso: string | undefined): string | null {
   if (!iso) return null
   try {
-    return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+    // Date-only strings (YYYY-MM-DD) are UTC midnight in JS — parse as local
+    const parts = iso.split('T')[0].split('-').map(Number)
+    const d = parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date(iso)
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
   } catch {
     return iso
   }

@@ -504,8 +504,10 @@ function isValidStatus(s: string): boolean {
 
 function fmtDate(iso: string): string {
   if (!iso) return '—'
-  const d = new Date(iso)
-  return isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' })
+  // YYYY-MM-DD strings are UTC midnight in JS — parse as local to avoid off-by-one day
+  const [y, m, d] = iso.split('T')[0].split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  return isNaN(date.getTime()) ? iso : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' })
 }
 
 function fmtSalary(min?: number, max?: number, currency?: string): string {

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
-import { getBreakdown, getRoleCounts, type BreakdownResponse, type RoleCountsResponse } from '../api/stats'
+import { getBreakdown, getInsights, getRoleCounts, type BreakdownResponse, type RoleCountsResponse } from '../api/stats'
 
 const USE_MOCK = (import.meta.env.VITE_USE_MOCK ?? 'true') === 'true'
 const CURRENT_YEAR = new Date().getFullYear()
@@ -38,6 +39,20 @@ export default function Dashboard() {
     fetchData(controller.signal)
     return () => controller.abort()
   }, [groupBy, year]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const {
+    data: insightsData,
+    isLoading: insightsLoading,
+    isError: insightsError,
+    isFetching: insightsFetching,
+    refetch: refetchInsights,
+  } = useQuery({
+    queryKey: ['insights'],
+    queryFn: getInsights,
+    staleTime: 30 * 60 * 1000,
+    retry: 1,
+    enabled: !USE_MOCK,
+  })
 
   const windows = data?.openWindows
   const rows = data?.rows ?? []
@@ -98,6 +113,51 @@ export default function Dashboard() {
         ))}
       </div>
       <p style={{ fontSize: '0.7rem', color: 'var(--pico-muted-color)', marginBottom: '1rem', marginTop: 0 }}>Open applications (excl. Rejected / Accepted / Withdrawn)</p>
+
+      {/* AI Insights card */}
+      {!USE_MOCK && (
+        <article style={{ marginBottom: '1rem', padding: '1rem' }}>
+          <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>AI Insights</span>
+            <button
+              style={{ padding: '3px 10px', fontSize: '0.75rem', marginBottom: 0 }}
+              className="secondary"
+              onClick={() => refetchInsights()}
+              disabled={insightsFetching}
+              aria-busy={insightsFetching}
+            >
+              {insightsFetching ? 'Generating…' : 'Refresh'}
+            </button>
+          </header>
+
+          {insightsLoading && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {[80, 65, 72].map(w => (
+                <div key={w} aria-hidden="true" style={{ height: '0.9rem', borderRadius: '4px', background: 'var(--pico-muted-border-color)', width: `${w}%`, animation: 'pulse 1.5s ease-in-out infinite' }} />
+              ))}
+            </div>
+          )}
+
+          {!insightsLoading && insightsError && (
+            <p style={{ fontSize: '0.82rem', color: 'var(--pico-muted-color)', margin: 0 }}>
+              Could not load insights. <button style={{ padding: 0, background: 'none', border: 'none', color: 'var(--pico-primary)', cursor: 'pointer', fontSize: '0.82rem' }} onClick={() => refetchInsights()}>Retry</button>
+            </p>
+          )}
+
+          {!insightsLoading && !insightsError && insightsData && (
+            <>
+              <ul style={{ margin: 0, paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                {insightsData.insights.map((insight, i) => (
+                  <li key={i} style={{ fontSize: '0.82rem', lineHeight: 1.5 }}>{insight}</li>
+                ))}
+              </ul>
+              <p style={{ fontSize: '0.68rem', color: 'var(--pico-muted-color)', margin: '0.6rem 0 0' }}>
+                Generated at {new Date(insightsData.generatedAt).toLocaleTimeString()}
+              </p>
+            </>
+          )}
+        </article>
+      )}
 
       {error && <article><header>Error</header><p>{error}</p></article>}
       {loading && <article aria-busy="true"><p>Loading…</p></article>}

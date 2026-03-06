@@ -1,9 +1,11 @@
 package com.jobtracker.stats.api;
 
 import com.jobtracker.stats.api.dto.BreakdownResponseDto;
+import com.jobtracker.stats.api.dto.InsightsDto;
 import com.jobtracker.stats.api.dto.RoleCountsResponseDto;
 import com.jobtracker.stats.api.dto.StatsSummaryDto;
 import com.jobtracker.stats.api.dto.TrendResponseDto;
+import com.jobtracker.stats.service.InsightsService;
 import com.jobtracker.stats.service.StatsService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -24,9 +26,11 @@ import java.util.UUID;
 public class StatsController {
 
     private final StatsService svc;
+    private final InsightsService insightsService;
 
-    public StatsController(StatsService svc) {
+    public StatsController(StatsService svc, InsightsService insightsService) {
         this.svc = svc;
+        this.insightsService = insightsService;
     }
 
     @GetMapping("/summary")
@@ -50,6 +54,11 @@ public class StatsController {
             @RequestParam(defaultValue = "month") String groupBy,
             @RequestParam(required = false) Integer year) {
         return svc.getBreakdown(currentUserId(), groupBy, year);
+    }
+
+    @GetMapping("/insights")
+    public InsightsDto getInsights() {
+        return insightsService.generateInsights(currentUserId());
     }
 
     @GetMapping("/roles")

@@ -141,6 +141,37 @@ services:
         reservations:
           memory: 64m
 
+  ollama:
+    image: ollama/ollama
+    container_name: jt_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 8g
+        reservations:
+          memory: 2g
+
+  ollama-init:
+    image: ollama/ollama
+    container_name: jt_ollama_init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama", "pull", "qwen2.5:1.5b"]
+    restart: "no"
+
   stats-service:
     build:
       context: ./stats-service
@@ -160,6 +191,8 @@ services:
       SERVER_PORT: 8082
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: qwen2.5:1.5b
     ports:
       - "8082:8082"
     deploy:
@@ -224,3 +257,4 @@ services:
 
 volumes:
   pgdata:
+  ollama_data:

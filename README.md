@@ -10,7 +10,7 @@ A full-stack job application tracking platform built with a microservices archit
 |---|---|
 | ![Login](docs/screenshots/login.png) | ![Register](docs/screenshots/register.png) |
 
-| Dashboard | Applications |
+| Dashboard (with AI Insights) | Applications |
 |---|---|
 | ![Dashboard](docs/screenshots/dashboard.png) | ![Applications](docs/screenshots/applications.png) |
 
@@ -43,6 +43,7 @@ A full-stack job application tracking platform built with a microservices archit
 
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker)
 ![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=flat-square&logo=redis)
+![Ollama](https://img.shields.io/badge/Ollama-LLM-000000?style=flat-square)
 ![Prometheus](https://img.shields.io/badge/Prometheus-monitoring-E6522C?style=flat-square&logo=prometheus)
 ![Zipkin](https://img.shields.io/badge/Zipkin-tracing-FE7139?style=flat-square)
 
@@ -103,7 +104,8 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
 | **config-server** | 8888 | Centralized config for all services (Spring Cloud Config) |
 | **PostgreSQL** | 5432 | Two databases: `jt_apps` (write) and `jt_stats` (read) |
 | **Kafka** | 9092 | KRaft mode, topic: `application-events` |
-| **Redis** | 6379 | Cache for all three stats endpoints, 5-minute TTL |
+| **Redis** | 6379 | Cache for stats endpoints (5-min TTL) and AI insights (30-min TTL) |
+| **Ollama** | 11434 | Local LLM server — serves `qwen2.5:1.5b` for AI insights generation |
 | **Prometheus** | 9090 | Scrapes `/actuator/prometheus` from all Spring Boot services |
 | **Zipkin** | 9411 | Distributed tracing, 100% sampling |
 
@@ -126,6 +128,7 @@ This is the **Transactional Outbox Pattern** — Kafka being down never causes d
 - **CSV Import** — Bulk import applications from a spreadsheet export; handles quoted commas, multiple date formats, salary parsing (`$50K`, `50,000–80,000`), and flexible status mapping (`Open` → APPLIED, `Closed` → REJECTED, Open + Call → PHONE)
 - **Bulk delete** — Select any number of applications via per-row checkboxes or the select-all header checkbox, then delete them all in one click; deletions are fired in parallel and the list updates immediately
 - **Advanced filtering** — Filter applications by status, search (company/role), month, year, and call received; sort by apply date or date added; page-based pagination (20 per page)
+- **AI Insights** — The Dashboard includes an "AI Insights" card powered by a locally-running LLM (Ollama + `qwen2.5:1.5b`). It aggregates all your stats data (30-day summary, 12-week trend, monthly breakdown, role distribution) and generates 3–5 concise, actionable coaching insights. Responses are cached in Redis for 30 minutes; a Refresh button busts the cache on demand. Fully offline — no API key required
 - **Analytics Dashboard** — By Month / By Year toggle with grouped Applied vs Rejected bar chart, summary table, and 7 open-window KPI cards (last 7d / 15d / 30d / 3mo / 6mo / 9mo / 1yr)
 - **Pre-computed aggregate tables** — `agg_monthly` and `agg_weekly` in `jt_stats` are maintained in-sync by stats-listener (recomputed atomically on every Kafka event); stats-service reads from these tables with indexed scans instead of live GROUP BY on the raw snapshot
 - **Redis caching** — All three stats endpoints (`/summary`, `/trend`, `/breakdown`) are cached in Redis with a 5-minute TTL, keyed per-user; the stats-listener evicts the affected user's cache keys immediately after processing each Kafka event, so the dashboard always reflects the latest data
@@ -199,6 +202,9 @@ Response: {
   rows: [{ label, periodNum, totalApplied, totalRejected, totalOpen }],
   openWindows: { last7d, last15d, last30d, last3m, last6m, last9m, last1y }
 }
+
+GET /v1/stats/insights
+Response: { insights: ["...", "...", "..."], generatedAt }
 ```
 
 Swagger UI available at `http://localhost:8081/swagger-ui.html` and `http://localhost:8082/swagger-ui.html`.
@@ -235,7 +241,9 @@ docker compose up
 ```
 
 Docker startup order is automatically enforced:
-`postgres + kafka + redis + config-server` → `applications-service + stats-service + stats-listener` → `api-gateway`
+`postgres + kafka + redis + config-server + ollama` → `applications-service + stats-service + stats-listener + ollama-init` → `api-gateway`
+
+> **First run note:** An `ollama-init` container automatically pulls `qwen2.5:1.5b` (~1GB) on first startup. The AI Insights card shows a graceful fallback message until the download completes. The model is cached in the `ollama_data` Docker volume and is not re-downloaded on subsequent runs.
 
 ### 3. Start the frontend
 

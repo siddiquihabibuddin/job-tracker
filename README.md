@@ -66,7 +66,7 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
                         │   │  Applications Svc   │  │     Stats Service     │  │
                         │   │     :8081           │  │        :8082          │  │
                         │   │  Spring Boot + JPA  │  │  Spring Boot + JDBC  │  │
-                        │   │  JWT Auth + Flyway  │  │  JWT Auth + Flyway   │  │
+                        │   │  JWT Auth + Flyway  │  │  JWT Auth + Ollama   │  │
                         │   └──────────┬──────────┘  └──────┬──────▲─────────┘  │
                         │              │                     │      │             │
                         │   ┌──────────▼──────────┐  ┌──────▼──┐  │             │
@@ -85,11 +85,14 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
                         │   │    (KRaft) :9092      │                            │
                         │   └──────────▲───────────┘                            │
                         │              │                                         │
-                        │   ┌──────────┴───────────┐                            │
-                        │   │  OutboxPoller (5s)   │  Config Server :8888       │
-                        │   │  reads outbox_events │  Prometheus    :9090       │
-                        │   │  → publishes to Kafka│  Zipkin        :9411       │
-                        │   └──────────────────────┘                            │
+                        │   ┌──────────┴───────────┐  ┌────────────────────────┐ │
+                        │   │  OutboxPoller (5s)   │  │   Ollama  :11434       │ │
+                        │   │  reads outbox_events │  │  qwen2.5:1.5b          │ │
+                        │   │  → publishes to Kafka│  │  ▲ AI Insights (stats) │ │
+                        │   └──────────────────────┘  └────────────────────────┘ │
+                        │                                                         │
+                        │        Config Server :8888  Prometheus :9090            │
+                        │        Zipkin        :9411                              │
                         └─────────────────────────────────────────────────────────┘
 ```
 

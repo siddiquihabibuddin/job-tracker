@@ -10,6 +10,7 @@ public record ApplicationEvent(
         String status,
         String source,
         String role,
+        String company,
         OffsetDateTime createdAt,
         OffsetDateTime deletedAt,
         OffsetDateTime occurredAt,

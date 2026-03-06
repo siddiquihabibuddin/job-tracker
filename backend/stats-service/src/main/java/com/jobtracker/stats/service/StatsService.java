@@ -1,5 +1,6 @@
 package com.jobtracker.stats.service;
 
+import com.jobtracker.stats.api.dto.ActivityItemDto;
 import com.jobtracker.stats.api.dto.BreakdownResponseDto;
 import com.jobtracker.stats.api.dto.BreakdownRowDto;
 import com.jobtracker.stats.api.dto.OpenWindowsDto;
@@ -226,6 +227,20 @@ public class StatsService {
             }
             return new RoleCountsResponseDto("year", null, rows);
         }
+    }
+
+    public List<ActivityItemDto> getActivityFeed(UUID userId, UUID appId) {
+        List<ActivityItemDto> items = new ArrayList<>();
+        jdbc.query(
+            "SELECT id, event_type, message, occurred_at FROM activity_feed WHERE app_id = ? AND user_id = ? ORDER BY occurred_at DESC LIMIT 50",
+            (RowCallbackHandler) rs -> items.add(new ActivityItemDto(
+                UUID.fromString(rs.getString(1)),
+                rs.getString(2),
+                rs.getString(3),
+                rs.getObject(4, java.time.OffsetDateTime.class).toString()
+            )),
+            appId, userId);
+        return items;
     }
 
     private OpenWindowsDto queryOpenWindows(UUID userId) {

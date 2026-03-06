@@ -88,3 +88,15 @@ export async function getInsights(): Promise<InsightsResponse> {
   const res = await httpStats.get<InsightsResponse>('/stats/insights')
   return res.data
 }
+
+export interface ActivityItem {
+  id: string
+  eventType: string
+  message: string
+  occurredAt: string
+}
+
+export async function getActivityFeed(appId: string): Promise<ActivityItem[]> {
+  const res = await httpStats.get<ActivityItem[]>(`/stats/activity/${appId}`)
+  return res.data
+}

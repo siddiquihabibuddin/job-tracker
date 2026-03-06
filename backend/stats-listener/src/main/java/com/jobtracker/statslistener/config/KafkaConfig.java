@@ -61,6 +61,39 @@ public class KafkaConfig {
     }
 
     @Bean
+    public ConsumerFactory<String, ApplicationEvent> activityConsumerFactory() {
+        JsonDeserializer<ApplicationEvent> deserializer = new JsonDeserializer<>(ApplicationEvent.class, false);
+        deserializer.addTrustedPackages("*");
+
+        Map<String, Object> props = new HashMap<>();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "activity-service");
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        return new DefaultKafkaConsumerFactory<>(props, new StringDeserializer(), deserializer);
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, ApplicationEvent> activityKafkaListenerContainerFactory(
+            ConsumerFactory<String, ApplicationEvent> activityConsumerFactory,
+            KafkaTemplate<String, Object> dlqKafkaTemplate) {
+
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(dlqKafkaTemplate);
+        DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, new FixedBackOff(1000L, 3));
+
+        errorHandler.setRetryListeners((record, ex, deliveryAttempt) ->
+            log.warn("Activity retry attempt {} for record offset={} due to: {}",
+                deliveryAttempt, record.offset(), ex.getMessage())
+        );
+
+        ConcurrentKafkaListenerContainerFactory<String, ApplicationEvent> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(activityConsumerFactory);
+        factory.setCommonErrorHandler(errorHandler);
+        return factory;
+    }
+
+    @Bean
     public ConcurrentKafkaListenerContainerFactory<String, ApplicationEvent> kafkaListenerContainerFactory(
             ConsumerFactory<String, ApplicationEvent> consumerFactory,
             KafkaTemplate<String, Object> dlqKafkaTemplate) {

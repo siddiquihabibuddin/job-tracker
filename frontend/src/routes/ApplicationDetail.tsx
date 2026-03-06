@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useParams, Link } from 'react-router-dom'
+import { getActivityFeed, type ActivityItem } from '../api/stats'
 import { fetchMockApplicationById, updateMockApplication } from '../mocks/applications'
 import {
   getApplicationById as apiGet,
@@ -10,6 +12,14 @@ import {
 
 const USE_MOCK = (import.meta.env.VITE_USE_MOCK ?? 'true') === 'true'
 const STATUSES: AppStatus[] = ['APPLIED', 'PHONE', 'ONSITE', 'OFFER', 'REJECTED', 'ACCEPTED', 'WITHDRAWN']
+
+function formatActivityTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+  } catch {
+    return iso
+  }
+}
 
 function formatDate(iso: string | undefined): string | null {
   if (!iso) return null
@@ -32,6 +42,13 @@ export default function ApplicationDetail() {
   const [editingRejectDate, setEditingRejectDate] = useState(false)
   const [rejectDateInput, setRejectDateInput] = useState('')
   const [toast, setToast] = useState<string | null>(null)
+
+  const { data: activityItems, isLoading: activityLoading, isError: activityError } = useQuery<ActivityItem[]>({
+    queryKey: ['activity', id],
+    queryFn: () => getActivityFeed(id!),
+    enabled: !USE_MOCK && !!id,
+    staleTime: 30_000,
+  })
 
   useEffect(() => {
     let alive = true
@@ -258,6 +275,27 @@ export default function ApplicationDetail() {
           <p>Notes placeholder</p>
         </article>
       </div>
+
+      {!USE_MOCK && (
+        <article>
+          <header>Activity</header>
+          {activityLoading && <p style={{ color: 'var(--pico-muted-color)' }}>Loading activity…</p>}
+          {activityError && <p style={{ color: 'var(--pico-del-color)' }}>Could not load activity feed.</p>}
+          {!activityLoading && !activityError && activityItems && activityItems.length === 0 && (
+            <p style={{ color: 'var(--pico-muted-color)' }}><em>No activity recorded yet.</em></p>
+          )}
+          {activityItems && activityItems.length > 0 && (
+            <ol style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              {activityItems.map(item => (
+                <li key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '0.4rem 0', borderBottom: '1px solid var(--pico-muted-border-color)' }}>
+                  <span>{item.message}</span>
+                  <small style={{ color: 'var(--pico-muted-color)', whiteSpace: 'nowrap', marginLeft: '1rem' }}>{formatActivityTime(item.occurredAt)}</small>
+                </li>
+              ))}
+            </ol>
+          )}
+        </article>
+      )}
     </>
   )
 }

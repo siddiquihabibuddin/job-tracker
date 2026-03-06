@@ -1,5 +1,6 @@
 package com.jobtracker.stats.api;
 
+import com.jobtracker.stats.api.dto.ActivityItemDto;
 import com.jobtracker.stats.api.dto.BreakdownResponseDto;
 import com.jobtracker.stats.api.dto.InsightsDto;
 import com.jobtracker.stats.api.dto.RoleCountsResponseDto;
@@ -14,10 +15,12 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -66,6 +69,11 @@ public class StatsController {
             @RequestParam(defaultValue = "month") String groupBy,
             @RequestParam(required = false) Integer year) {
         return svc.getRoleCounts(currentUserId(), groupBy, year);
+    }
+
+    @GetMapping("/activity/{appId}")
+    public List<ActivityItemDto> activityFeed(@PathVariable UUID appId) {
+        return svc.getActivityFeed(currentUserId(), appId);
     }
 
     private UUID currentUserId() {

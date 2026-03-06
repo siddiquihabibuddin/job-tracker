@@ -102,11 +102,11 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
 |---|---|---|
 | **api-gateway** | 8080 | Single entry point — routes traffic, handles CORS globally |
 | **applications-service** | 8081 | Write service — REST CRUD, JPA + Hibernate, publishes Kafka events |
-| **stats-service** | 8082 | Read service — analytics from pre-computed agg tables, Redis-cached responses |
-| **stats-listener** | 8083 | Kafka consumer — upserts `applications_snapshot`, maintains `agg_monthly`/`agg_weekly` |
+| **stats-service** | 8082 | Read service — analytics from pre-computed agg tables, Redis-cached; serves activity feed |
+| **stats-listener** | 8083 | Kafka consumer — two groups: `stats-service` (snapshot/agg) + `activity-service` (activity feed) |
 | **config-server** | 8888 | Centralized config for all services (Spring Cloud Config) |
 | **PostgreSQL** | 5432 | Two databases: `jt_apps` (write) and `jt_stats` (read) |
-| **Kafka** | 9092 | KRaft mode, topic: `application-events` |
+| **Kafka** | 9092 | KRaft mode, topic: `application-events`, two consumer groups |
 | **Redis** | 6379 | Cache for stats endpoints (5-min TTL) and AI insights (30-min TTL) |
 | **Ollama** | 11434 | Local LLM server — serves `qwen2.5:1.5b` for AI insights generation |
 | **Prometheus** | 9090 | Scrapes `/actuator/prometheus` from all Spring Boot services |
@@ -116,8 +116,11 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
 
 1. `applications-service` creates/updates/deletes an application → writes an `ApplicationEvent` row to the `outbox_events` table **in the same DB transaction** as the application save
 2. `OutboxPoller` (scheduled every 5s) reads unpublished outbox rows → publishes each to Kafka synchronously → marks `published_at`
-3. `stats-listener` consumes the event → upserts into `applications_snapshot` in `jt_stats`, then atomically recomputes the affected rows in `agg_monthly` and `agg_weekly` (pre-aggregated tables)
+3. `stats-listener` consumes events via **two independent consumer groups**:
+   - `stats-service` group → upserts into `applications_snapshot`, atomically recomputes `agg_monthly`/`agg_weekly`
+   - `activity-service` group → translates each event into a human-readable message, inserts into `activity_feed` (idempotent via unique constraint)
 4. `stats-service` queries `agg_monthly` / `agg_weekly` for indexed reads; results are cached in Redis for 5 minutes
+5. `GET /v1/stats/activity/{appId}` serves the per-application activity timeline to the frontend
 
 This is the **Transactional Outbox Pattern** — Kafka being down never causes data loss. Events accumulate safely in Postgres and drain automatically when Kafka recovers. The `stats-listener` uses `ON CONFLICT` upserts so duplicate delivery on poller restart is safe.
 
@@ -131,6 +134,7 @@ This is the **Transactional Outbox Pattern** — Kafka being down never causes d
 - **CSV Import** — Bulk import applications from a spreadsheet export; handles quoted commas, multiple date formats, salary parsing (`$50K`, `50,000–80,000`), and flexible status mapping (`Open` → APPLIED, `Closed` → REJECTED, Open + Call → PHONE)
 - **Bulk delete** — Select any number of applications via per-row checkboxes or the select-all header checkbox, then delete them all in one click; deletions are fired in parallel and the list updates immediately
 - **Advanced filtering** — Filter applications by status, search (company/role), month, year, and call received; sort by apply date or date added; page-based pagination (20 per page)
+- **Activity Feed** — Each Application Detail page shows a live activity timeline. Every create, status update, and deletion is translated into a human-readable message (e.g. "Applied for SWE at Google via LinkedIn", "Status changed to OFFER") and stored in the `activity_feed` table. Powered by Kafka fan-out: a second consumer group (`activity-service`) runs in `stats-listener` alongside the existing `stats-service` group, tracking independent offsets on the same `application-events` topic — no producer changes required. Idempotent via a unique constraint on `(app_id, event_type, occurred_at)`
 - **AI Insights** — The Dashboard includes an "AI Insights" card powered by a locally-running LLM (Ollama + `qwen2.5:1.5b`). It aggregates all your stats data (30-day summary, 12-week trend, monthly breakdown, role distribution) and generates 3–5 concise, actionable coaching insights. Responses are cached in Redis for 30 minutes; a Refresh button busts the cache on demand. Fully offline — no API key required
 - **Analytics Dashboard** — By Month / By Year toggle with grouped Applied vs Rejected bar chart, summary table, and 7 open-window KPI cards (last 7d / 15d / 30d / 3mo / 6mo / 9mo / 1yr)
 - **Pre-computed aggregate tables** — `agg_monthly` and `agg_weekly` in `jt_stats` are maintained in-sync by stats-listener (recomputed atomically on every Kafka event); stats-service reads from these tables with indexed scans instead of live GROUP BY on the raw snapshot
@@ -208,6 +212,9 @@ Response: {
 
 GET /v1/stats/insights
 Response: { insights: ["...", "...", "..."], generatedAt }
+
+GET /v1/stats/activity/{appId}
+Response: [{ id, eventType, message, occurredAt }]
 ```
 
 Swagger UI available at `http://localhost:8081/swagger-ui.html` and `http://localhost:8082/swagger-ui.html`.
@@ -307,6 +314,7 @@ JobTracker/
 - `applications_snapshot` — denormalized projection of applications, kept in sync via Kafka; includes `applied_at` for accurate date-based analytics
 - `agg_monthly` — pre-computed application counts keyed by `(user_id, year, month, status)`; updated atomically on every Kafka event; enables `breakdown` and month-level open-window queries with a single indexed scan
 - `agg_weekly` — pre-computed weekly counts keyed by `(user_id, week_start)`; updated atomically on every Kafka event; enables `trend` queries with a fast indexed range scan
+- `activity_feed` — per-application event timeline; one row per Kafka event, translated to a human-readable message; idempotent via unique constraint on `(app_id, event_type, occurred_at)`
 
 All schema changes are managed by Flyway migrations (`ddl-auto: validate`).
 

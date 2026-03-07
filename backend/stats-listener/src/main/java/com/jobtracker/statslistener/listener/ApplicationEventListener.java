@@ -42,6 +42,9 @@ public class ApplicationEventListener {
                             "VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING",
                             event.id(), event.userId(), event.status(), event.source(),
                             toTs(event.createdAt()), toTs(event.deletedAt()), event.appliedAt(), event.role());
+                    jdbc.update(
+                            "UPDATE applications_snapshot SET last_event_at = ?, company = ? WHERE id = ?",
+                            toTs(event.occurredAt()), event.company(), event.id());
                     LocalDate newDate = effectiveDate(event.appliedAt(), event.createdAt());
                     recomputeMonthly(event.userId(), newDate.getYear(), newDate.getMonthValue());
                     recomputeWeekly(event.userId(), newDate);
@@ -55,6 +58,12 @@ public class ApplicationEventListener {
                             "SET status = EXCLUDED.status, source = EXCLUDED.source, deleted_at = EXCLUDED.deleted_at, applied_at = EXCLUDED.applied_at, role = EXCLUDED.role",
                             event.id(), event.userId(), event.status(), event.source(),
                             toTs(event.createdAt()), toTs(event.deletedAt()), event.appliedAt(), event.role());
+                    jdbc.update(
+                            "UPDATE applications_snapshot SET last_event_at = ?, company = ? WHERE id = ?",
+                            toTs(event.occurredAt()), event.company(), event.id());
+                    jdbc.update(
+                            "UPDATE stale_flags SET resolved_at = NOW() WHERE app_id = ? AND resolved_at IS NULL",
+                            event.id());
                     LocalDate newDate = effectiveDate(event.appliedAt(), event.createdAt());
                     recomputeMonthly(event.userId(), newDate.getYear(), newDate.getMonthValue());
                     recomputeWeekly(event.userId(), newDate);
@@ -70,6 +79,12 @@ public class ApplicationEventListener {
                     jdbc.update(
                             "UPDATE applications_snapshot SET deleted_at = ? WHERE id = ?",
                             toTs(event.deletedAt()), event.id());
+                    jdbc.update(
+                            "UPDATE applications_snapshot SET last_event_at = ? WHERE id = ?",
+                            toTs(event.occurredAt()), event.id());
+                    jdbc.update(
+                            "UPDATE stale_flags SET resolved_at = NOW() WHERE app_id = ? AND resolved_at IS NULL",
+                            event.id());
                     if (oldDate != null) {
                         recomputeMonthly(event.userId(), oldDate.getYear(), oldDate.getMonthValue());
                         recomputeWeekly(event.userId(), oldDate);
@@ -143,9 +158,9 @@ public class ApplicationEventListener {
                        EXTRACT(year  FROM COALESCE(applied_at, created_at::date))::smallint,
                        EXTRACT(month FROM COALESCE(applied_at, created_at::date))::smallint,
                        CASE
-                           WHEN role ILIKE '%engineer%' OR role ILIKE '%developer%' OR role ILIKE '%dev%' THEN 'ENGINEER_DEV'
-                           WHEN role ILIKE '%manager%'  OR role ILIKE '%mgr%'                            THEN 'MANAGER'
+                           WHEN role ILIKE '%manager%'   OR role ILIKE '%mgr%'                            THEN 'MANAGER'
                            WHEN role ILIKE '%architect%'                                                  THEN 'ARCHITECT'
+                           WHEN role ILIKE '%engineer%' OR role ILIKE '%developer%' OR role ILIKE '%dev%' THEN 'ENGINEER_DEV'
                            ELSE 'OTHER'
                        END,
                        COUNT(*)

@@ -40,6 +40,10 @@ management:
       probes:
         enabled: true
 
+csv:
+  import:
+    folder: /app/csv-imports
+
 cors:
   enabled: false
   allowed-origins: "http://localhost:5173"

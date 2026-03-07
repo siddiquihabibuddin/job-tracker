@@ -4,9 +4,11 @@ import {
   listApplications as apiList,
   deleteApplication as apiDelete,
   importCsv,
+  importFolder,
   type Application,
   type AppStatus,
   type CsvImportResult,
+  type FolderImportResult,
 } from '../api/applications'
 import {
   fetchMockApplications as mockList,
@@ -98,6 +100,11 @@ export default function Applications() {
   const [importError, setImportError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Folder bulk import state
+  const [folderImporting, setFolderImporting] = useState(false)
+  const [folderResult, setFolderResult] = useState<FolderImportResult | null>(null)
+  const [showFolderResult, setShowFolderResult] = useState(false)
+
   useEffect(() => {
     let alive = true
     async function load() {
@@ -178,6 +185,20 @@ export default function Applications() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
+  async function handleFolderImport() {
+    setFolderImporting(true)
+    try {
+      const result = await importFolder()
+      setFolderResult(result)
+      setShowFolderResult(true)
+      if (result.totalImported > 0) { setPage(0); setLoadKey(k => k + 1) }
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Folder import failed')
+    } finally {
+      setFolderImporting(false)
+    }
+  }
+
   async function handleImport() {
     if (!importFile) return
     setImporting(true); setImportError(null); setImportResult(null)
@@ -238,6 +259,15 @@ export default function Applications() {
               {bulkDeleting ? 'Deleting…' : `Delete ${selected.size} selected`}
             </button>
           )}
+          <button
+            type="button"
+            style={{ padding: '4px 10px', fontSize: '0.8rem', marginBottom: 0 }}
+            disabled={folderImporting}
+            aria-busy={folderImporting}
+            onClick={handleFolderImport}
+          >
+            {folderImporting ? 'Importing…' : 'Bulk Import'}
+          </button>
           <div style={{ position: 'relative', display: 'inline-flex' }} className="csv-tooltip-wrap">
             <button type="button" style={{ padding: '4px 10px', fontSize: '0.8rem', marginBottom: 0 }} onClick={openImportModal}>Import CSV</button>
             <div className="csv-tooltip">
@@ -281,6 +311,49 @@ export default function Applications() {
           }
         `}</style>
       </header>
+
+      {/* Folder Import Result Modal */}
+      {showFolderResult && folderResult && (
+        <div
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
+          onClick={e => { if (e.target === e.currentTarget) setShowFolderResult(false) }}
+        >
+          <article style={{ minWidth: '24rem', maxWidth: '38rem', width: '100%', margin: '1rem' }}>
+            <header>
+              <strong>Bulk Import — {folderResult.totalFiles} file{folderResult.totalFiles !== 1 ? 's' : ''}</strong>
+              <span style={{ marginLeft: '1rem', color: '#22c55e' }}>✓ {folderResult.totalImported} imported</span>
+              {folderResult.totalFailed > 0 && (
+                <span style={{ marginLeft: '0.75rem', color: '#ef4444' }}>✗ {folderResult.totalFailed} failed</span>
+              )}
+            </header>
+            {folderResult.totalFiles === 0 ? (
+              <p style={{ color: 'var(--pico-muted-color)', fontSize: '0.85rem' }}>No CSV files found in the import folder.</p>
+            ) : (
+              <div style={{ maxHeight: '20rem', overflowY: 'auto' }}>
+                {folderResult.files.map((f, i) => (
+                  <div key={i} style={{ borderBottom: '1px solid var(--pico-muted-border-color)', padding: '0.5rem 0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                      <span style={{ fontWeight: 500 }}>{f.fileName}</span>
+                      <span>
+                        <span style={{ color: '#22c55e' }}>✓ {f.imported}</span>
+                        {f.failed > 0 && <span style={{ color: '#ef4444', marginLeft: '0.5rem' }}>✗ {f.failed}</span>}
+                      </span>
+                    </div>
+                    {f.errors.length > 0 && (
+                      <ul style={{ fontSize: '0.75rem', color: '#ef4444', margin: '0.25rem 0 0', paddingLeft: '1.2rem', maxHeight: '5rem', overflowY: 'auto' }}>
+                        {f.errors.map((err, j) => <li key={j}>{err}</li>)}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            <footer style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button type="button" className="secondary" onClick={() => setShowFolderResult(false)}>Close</button>
+            </footer>
+          </article>
+        </div>
+      )}
 
       {/* CSV Import Modal */}
       {showImport && (

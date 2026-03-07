@@ -132,6 +132,7 @@ This is the **Transactional Outbox Pattern** — Kafka being down never causes d
 - **JWT Authentication** — HS256 token-based auth, enforced by Spring Security on all services; each user sees only their own data
 - **Full CRUD** — Create, read, update, and soft-delete job applications with rich fields: apply date, salary range, job link, call received, reject date, resume, login details, notes
 - **CSV Import** — Bulk import applications from a spreadsheet export; handles quoted commas, multiple date formats, salary parsing (`$50K`, `50,000–80,000`), and flexible status mapping (`Open` → APPLIED, `Closed` → REJECTED, Open + Call → PHONE)
+- **Folder-based Bulk Import** — Drop CSV files into a configured host folder (`HOST_CSV_FOLDER` in `.env`, mounted into the container at `/app/csv-imports`) and click "Bulk Import" in the UI. Each file is processed individually and moved to a `processed/` subfolder after import. The results modal shows per-file imported/failed counts with expandable row-level errors
 - **Bulk delete** — Select any number of applications via per-row checkboxes or the select-all header checkbox, then delete them all in one click; deletions are fired in parallel and the list updates immediately
 - **Advanced filtering** — Filter applications by status, search (company/role), month, year, and call received; sort by apply date or date added; page-based pagination (20 per page)
 - **Activity Feed** — Each Application Detail page shows a live activity timeline. Every create, status update, and deletion is translated into a human-readable message (e.g. "Applied for SWE at Google via LinkedIn", "Status changed to OFFER") and stored in the `activity_feed` table. Powered by Kafka fan-out: a second consumer group (`activity-service`) runs in `stats-listener` alongside the existing `stats-service` group, tracking independent offsets on the same `application-events` topic — no producer changes required. Idempotent via a unique constraint on `(app_id, event_type, occurred_at)`
@@ -178,6 +179,7 @@ PATCH  /v1/applications/{id}                (Idempotency-Key header required)
 DELETE /v1/applications/{id}
 
 POST   /v1/applications/import              (multipart/form-data, field: file)
+POST   /v1/applications/import-folder       (processes all .csv files in HOST_CSV_FOLDER)
 
 POST   /v1/applications/{id}/notes
 PATCH  /v1/applications/{appId}/notes/{noteId}

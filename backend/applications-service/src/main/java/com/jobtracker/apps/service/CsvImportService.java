@@ -8,7 +8,10 @@ import com.opencsv.exceptions.CsvException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -55,8 +58,18 @@ public class CsvImportService {
     }
 
     public CsvImportResult importCsv(MultipartFile file) throws IOException {
+        return processCsv(file.getInputStream());
+    }
+
+    public CsvImportResult importCsv(File file) throws IOException {
+        try (var stream = new FileInputStream(file)) {
+            return processCsv(stream);
+        }
+    }
+
+    private CsvImportResult processCsv(InputStream stream) throws IOException {
         List<String[]> rows;
-        try (var reader = new CSVReader(new InputStreamReader(file.getInputStream()))) {
+        try (var reader = new CSVReader(new InputStreamReader(stream))) {
             rows = reader.readAll();
         } catch (CsvException e) {
             throw new IOException("Failed to parse CSV: " + e.getMessage(), e);

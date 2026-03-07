@@ -66,6 +66,10 @@ logging:
     com.jobtracker: INFO
     org.springframework.security: WARN
 
+csv:
+  import:
+    folder: ${CSV_IMPORT_FOLDER:/app/csv-imports}
+
 # allow local dev UI
 cors:
   allowed-origins: "http://localhost:5173"

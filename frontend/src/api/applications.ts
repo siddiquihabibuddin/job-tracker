@@ -37,6 +37,20 @@ export interface CsvImportResult {
   errors: string[]
 }
 
+export interface FileImportSummary {
+  fileName: string
+  imported: number
+  failed: number
+  errors: string[]
+}
+
+export interface FolderImportResult {
+  totalFiles: number
+  totalImported: number
+  totalFailed: number
+  files: FileImportSummary[]
+}
+
 export async function listApplications(params: {
   status?: AppStatus | 'ALL'
   search?: string
@@ -121,5 +135,10 @@ export async function importCsv(file: File): Promise<CsvImportResult> {
   const res = await httpApps.post<CsvImportResult>('/applications/import', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
+  return res.data
+}
+
+export async function importFolder(): Promise<FolderImportResult> {
+  const res = await httpApps.post<FolderImportResult>('/applications/import-folder')
   return res.data
 }

@@ -2,6 +2,7 @@ package com.jobtracker.stats.service;
 
 import com.jobtracker.stats.api.dto.ActivityItemDto;
 import com.jobtracker.stats.api.dto.BreakdownResponseDto;
+import com.jobtracker.stats.api.dto.StaleAppDto;
 import com.jobtracker.stats.api.dto.BreakdownRowDto;
 import com.jobtracker.stats.api.dto.OpenWindowsDto;
 import com.jobtracker.stats.api.dto.RoleCountRowDto;
@@ -227,6 +228,29 @@ public class StatsService {
             }
             return new RoleCountsResponseDto("year", null, rows);
         }
+    }
+
+    public List<StaleAppDto> getStaleApplications(UUID userId) {
+        List<StaleAppDto> result = new ArrayList<>();
+        jdbc.query(
+            "SELECT sf.app_id, sf.company, sf.role, sf.status, sf.days_stale, sf.flagged_at, snap.applied_at " +
+            "FROM stale_flags sf " +
+            "LEFT JOIN applications_snapshot snap ON snap.id = sf.app_id " +
+            "WHERE sf.user_id = ? AND sf.resolved_at IS NULL " +
+            "ORDER BY snap.applied_at DESC NULLS LAST",
+            (RowCallbackHandler) rs -> {
+                var appliedAt = rs.getDate("applied_at");
+                result.add(new StaleAppDto(
+                    UUID.fromString(rs.getString("app_id")),
+                    rs.getString("company"),
+                    rs.getString("role"),
+                    rs.getString("status"),
+                    rs.getInt("days_stale"),
+                    rs.getObject("flagged_at", OffsetDateTime.class).toString(),
+                    appliedAt != null ? appliedAt.toLocalDate().toString() : null));
+            },
+            userId);
+        return result;
     }
 
     public List<ActivityItemDto> getActivityFeed(UUID userId, UUID appId) {

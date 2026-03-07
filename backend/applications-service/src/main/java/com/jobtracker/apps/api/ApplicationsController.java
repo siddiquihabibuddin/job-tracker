@@ -3,6 +3,7 @@ package com.jobtracker.apps.api;
 import com.jobtracker.apps.api.dto.*;
 import com.jobtracker.apps.service.ApplicationService;
 import com.jobtracker.apps.service.CsvImportService;
+import com.jobtracker.apps.service.FolderImportService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -24,10 +25,12 @@ public class ApplicationsController {
 
     private final ApplicationService svc;
     private final CsvImportService csvImportService;
+    private final FolderImportService folderImportService;
 
-    public ApplicationsController(ApplicationService svc, CsvImportService csvImportService) {
+    public ApplicationsController(ApplicationService svc, CsvImportService csvImportService, FolderImportService folderImportService) {
         this.svc = svc;
         this.csvImportService = csvImportService;
+        this.folderImportService = folderImportService;
     }
 
     // List with basic filters
@@ -96,6 +99,12 @@ public class ApplicationsController {
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CsvImportResult importCsv(@RequestParam("file") MultipartFile file) throws IOException {
         return csvImportService.importCsv(file);
+    }
+
+    // Folder-based bulk import
+    @PostMapping("/import-folder")
+    public FolderImportResult importFolder() throws IOException {
+        return folderImportService.importFromFolder();
     }
 
 }

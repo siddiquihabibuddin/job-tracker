@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
-import { getBreakdown, getInsights, getRoleCounts, type BreakdownResponse, type RoleCountsResponse } from '../api/stats'
+import { Link } from 'react-router-dom'
+import { getBreakdown, getInsights, getRoleCounts, getStaleApps, type BreakdownResponse, type RoleCountsResponse, type StaleApp } from '../api/stats'
 
 const USE_MOCK = (import.meta.env.VITE_USE_MOCK ?? 'true') === 'true'
 const CURRENT_YEAR = new Date().getFullYear()
@@ -53,6 +54,18 @@ export default function Dashboard() {
     retry: 1,
     enabled: !USE_MOCK,
   })
+
+  const { data: staleApps } = useQuery<StaleApp[]>({
+    queryKey: ['stale-apps'],
+    queryFn: getStaleApps,
+    enabled: !USE_MOCK,
+    staleTime: 60_000,
+  })
+
+  const GHOST_PAGE_SIZE = 8
+  const [ghostPage, setGhostPage] = useState(0)
+  const ghostTotalPages = staleApps ? Math.ceil(staleApps.length / GHOST_PAGE_SIZE) : 0
+  const ghostPagedApps = staleApps?.slice(ghostPage * GHOST_PAGE_SIZE, (ghostPage + 1) * GHOST_PAGE_SIZE) ?? []
 
   const windows = data?.openWindows
   const rows = data?.rows ?? []
@@ -113,51 +126,6 @@ export default function Dashboard() {
         ))}
       </div>
       <p style={{ fontSize: '0.7rem', color: 'var(--pico-muted-color)', marginBottom: '1rem', marginTop: 0 }}>Open applications (excl. Rejected / Accepted / Withdrawn)</p>
-
-      {/* AI Insights card */}
-      {!USE_MOCK && (
-        <article style={{ marginBottom: '1rem', padding: '1rem' }}>
-          <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>AI Insights</span>
-            <button
-              style={{ padding: '3px 10px', fontSize: '0.75rem', marginBottom: 0 }}
-              className="secondary"
-              onClick={() => refetchInsights()}
-              disabled={insightsFetching}
-              aria-busy={insightsFetching}
-            >
-              {insightsFetching ? 'Generating…' : 'Refresh'}
-            </button>
-          </header>
-
-          {insightsLoading && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {[80, 65, 72].map(w => (
-                <div key={w} aria-hidden="true" style={{ height: '0.9rem', borderRadius: '4px', background: 'var(--pico-muted-border-color)', width: `${w}%`, animation: 'pulse 1.5s ease-in-out infinite' }} />
-              ))}
-            </div>
-          )}
-
-          {!insightsLoading && insightsError && (
-            <p style={{ fontSize: '0.82rem', color: 'var(--pico-muted-color)', margin: 0 }}>
-              Could not load insights. <button style={{ padding: 0, background: 'none', border: 'none', color: 'var(--pico-primary)', cursor: 'pointer', fontSize: '0.82rem' }} onClick={() => refetchInsights()}>Retry</button>
-            </p>
-          )}
-
-          {!insightsLoading && !insightsError && insightsData && (
-            <>
-              <ul style={{ margin: 0, paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                {insightsData.insights.map((insight, i) => (
-                  <li key={i} style={{ fontSize: '0.82rem', lineHeight: 1.5 }}>{insight}</li>
-                ))}
-              </ul>
-              <p style={{ fontSize: '0.68rem', color: 'var(--pico-muted-color)', margin: '0.6rem 0 0' }}>
-                Generated at {new Date(insightsData.generatedAt).toLocaleTimeString()}
-              </p>
-            </>
-          )}
-        </article>
-      )}
 
       {error && <article><header>Error</header><p>{error}</p></article>}
       {loading && <article aria-busy="true"><p>Loading…</p></article>}
@@ -280,6 +248,91 @@ export default function Dashboard() {
             )
           })()}
         </>
+      )}
+
+      {/* AI Insights card */}
+      {!USE_MOCK && (
+        <article style={{ marginTop: '1rem', padding: '1rem' }}>
+          <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>AI Insights</span>
+            <button
+              style={{ padding: '3px 10px', fontSize: '0.75rem', marginBottom: 0 }}
+              className="secondary"
+              onClick={() => refetchInsights()}
+              disabled={insightsFetching}
+              aria-busy={insightsFetching}
+            >
+              {insightsFetching ? 'Generating…' : 'Refresh'}
+            </button>
+          </header>
+
+          {insightsLoading && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {[80, 65, 72].map(w => (
+                <div key={w} aria-hidden="true" style={{ height: '0.9rem', borderRadius: '4px', background: 'var(--pico-muted-border-color)', width: `${w}%`, animation: 'pulse 1.5s ease-in-out infinite' }} />
+              ))}
+            </div>
+          )}
+
+          {!insightsLoading && insightsError && (
+            <p style={{ fontSize: '0.82rem', color: 'var(--pico-muted-color)', margin: 0 }}>
+              Could not load insights. <button style={{ padding: 0, background: 'none', border: 'none', color: 'var(--pico-primary)', cursor: 'pointer', fontSize: '0.82rem' }} onClick={() => refetchInsights()}>Retry</button>
+            </p>
+          )}
+
+          {!insightsLoading && !insightsError && insightsData && (
+            <>
+              <ul style={{ margin: 0, paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                {insightsData.insights.map((insight, i) => (
+                  <li key={i} style={{ fontSize: '0.82rem', lineHeight: 1.5 }}>{insight}</li>
+                ))}
+              </ul>
+              <p style={{ fontSize: '0.68rem', color: 'var(--pico-muted-color)', margin: '0.6rem 0 0' }}>
+                Generated at {new Date(insightsData.generatedAt).toLocaleTimeString()}
+              </p>
+            </>
+          )}
+        </article>
+      )}
+
+      {!USE_MOCK && staleApps && staleApps.length > 0 && (
+        <article style={{ marginTop: '1rem', padding: '1rem', borderLeft: '3px solid #f59e0b' }}>
+          <header style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>Possibly Ghosting ({staleApps.length})</span>
+            <small style={{ color: 'var(--pico-muted-color)', fontSize: '0.72rem' }}>No updates in 14+ days</small>
+          </header>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {ghostPagedApps.map(app => (
+              <li key={app.appId} style={{ padding: '0.3rem 0', borderBottom: '1px solid var(--pico-muted-border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Link to={`/applications/${app.appId}`} style={{ fontSize: '0.82rem', fontWeight: 500 }}>
+                  {app.company} — {app.role}
+                </Link>
+                <small style={{ color: 'var(--pico-muted-color)', fontSize: '0.72rem', whiteSpace: 'nowrap', marginLeft: '0.75rem' }}>
+                  {app.status} · {app.appliedAt ?? '—'} · {app.daysSinceLastEvent}d ago
+                </small>
+              </li>
+            ))}
+          </ul>
+          {ghostTotalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.6rem' }}>
+              <small style={{ color: 'var(--pico-muted-color)', fontSize: '0.72rem' }}>
+                {ghostPage * GHOST_PAGE_SIZE + 1}–{Math.min((ghostPage + 1) * GHOST_PAGE_SIZE, staleApps.length)} of {staleApps.length}
+              </small>
+              <div style={{ display: 'flex', gap: '0.25rem' }}>
+                <button
+                  style={{ padding: '2px 8px', fontSize: '0.75rem', marginBottom: 0 }}
+                  disabled={ghostPage === 0}
+                  onClick={() => setGhostPage(p => p - 1)}
+                >‹ Prev</button>
+                <button
+                  style={{ padding: '2px 8px', fontSize: '0.75rem', marginBottom: 0 }}
+                  disabled={ghostPage >= ghostTotalPages - 1}
+                  onClick={() => setGhostPage(p => p + 1)}
+                >Next ›</button>
+              </div>
+            </div>
+          )}
+        </article>
       )}
     </>
   )

@@ -89,6 +89,9 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       JWT_SECRET: ${JWT_SECRET}
       SERVER_PORT: 8081
+      CSV_IMPORT_FOLDER: /app/csv-imports
+    volumes:
+      - ${HOST_CSV_FOLDER:-./csv-imports}:/app/csv-imports
     ports:
       - "8081:8081"
     deploy:

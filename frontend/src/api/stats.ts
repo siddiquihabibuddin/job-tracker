@@ -100,3 +100,18 @@ export async function getActivityFeed(appId: string): Promise<ActivityItem[]> {
   const res = await httpStats.get<ActivityItem[]>(`/stats/activity/${appId}`)
   return res.data
 }
+
+export interface StaleApp {
+  appId: string
+  company: string
+  role: string
+  status: string
+  daysSinceLastEvent: number
+  flaggedAt: string
+  appliedAt?: string
+}
+
+export async function getStaleApps(): Promise<StaleApp[]> {
+  const res = await httpStats.get<StaleApp[]>('/stats/stale')
+  return res.data
+}

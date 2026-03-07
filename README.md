@@ -8,15 +8,15 @@ A full-stack job application tracking platform built with a microservices archit
 
 | Login | Register |
 |---|---|
-| ![Login](docs/screenshots/login.png) | ![Register](docs/screenshots/register.png) |
+| ![Login](docs/screenshots/login.png?raw=true) | ![Register](docs/screenshots/register.png?raw=true) |
 
 | Dashboard (with AI Insights) | Applications |
 |---|---|
-| ![Dashboard](docs/screenshots/dashboard.png) | ![Applications](docs/screenshots/applications.png) |
+| ![Dashboard](docs/screenshots/dashboard.png?raw=true) | ![Applications](docs/screenshots/applications.png?raw=true) |
 
 | Application Detail | New Application |
 |---|---|
-| ![Application Detail](docs/screenshots/view-application.png) | ![New Application](docs/screenshots/new-application.png) |
+| ![Application Detail](docs/screenshots/view-application.png?raw=true) | ![New Application](docs/screenshots/new-application.png?raw=true) |
 
 ---
 

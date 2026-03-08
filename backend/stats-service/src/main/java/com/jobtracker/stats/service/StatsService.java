@@ -102,9 +102,9 @@ public class StatsService {
         return new TrendResponseDto("week", points);
     }
 
-    @Cacheable(cacheNames = CacheConfig.CACHE_BREAKDOWN, key = "#userId + ':' + #groupBy + ':' + #year")
-    public BreakdownResponseDto getBreakdown(UUID userId, String groupBy, Integer year) {
-        log.info("Serving breakdown query userId={} groupBy={} year={}", userId, groupBy, year);
+    @Cacheable(cacheNames = CacheConfig.CACHE_BREAKDOWN, key = "#userId + ':' + #groupBy + ':' + #year + ':' + #tz")
+    public BreakdownResponseDto getBreakdown(UUID userId, String groupBy, Integer year, String tz) {
+        log.info("Serving breakdown query userId={} groupBy={} year={} tz={}", userId, groupBy, year, tz);
         queriesCounter.increment();
 
         boolean byMonth = "month".equalsIgnoreCase(groupBy);
@@ -135,7 +135,7 @@ public class StatsService {
                 rows.add(new BreakdownRowDto(MONTH_LABELS[m - 1], m, t[0], t[1], t[2]));
             }
 
-            OpenWindowsDto windows = queryOpenWindows(userId);
+            OpenWindowsDto windows = queryOpenWindows(userId, tz);
             return new BreakdownResponseDto("month", targetYear, rows, windows);
 
         } else {
@@ -160,7 +160,7 @@ public class StatsService {
                 rows.add(new BreakdownRowDto(String.valueOf(y), y, t[0], t[1], t[2]));
             }
 
-            OpenWindowsDto windows = queryOpenWindows(userId);
+            OpenWindowsDto windows = queryOpenWindows(userId, tz);
             return new BreakdownResponseDto("year", null, rows, windows);
         }
     }
@@ -267,13 +267,16 @@ public class StatsService {
         return items;
     }
 
-    private OpenWindowsDto queryOpenWindows(UUID userId) {
+    private OpenWindowsDto queryOpenWindows(UUID userId, String tz) {
+        String clientToday = (tz != null && !tz.isBlank())
+            ? "(NOW() AT TIME ZONE '" + tz.replace("'", "") + "')::date"
+            : "CURRENT_DATE";
         String snapSql =
             "SELECT " +
-            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) = CURRENT_DATE) AS today, " +
-            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= CURRENT_DATE - 7   AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last7d, " +
-            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= CURRENT_DATE - 15  AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last15d, " +
-            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= CURRENT_DATE - 30  AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last30d " +
+            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) = " + clientToday + " AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS today, " +
+            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= " + clientToday + " - 7   AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last7d, " +
+            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= " + clientToday + " - 15  AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last15d, " +
+            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= " + clientToday + " - 30  AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last30d " +
             "FROM applications_snapshot WHERE user_id=? AND deleted_at IS NULL";
 
         long[] snapResult = {0, 0, 0, 0};

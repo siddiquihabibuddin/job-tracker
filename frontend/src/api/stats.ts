@@ -50,9 +50,10 @@ export interface BreakdownResponse {
   openWindows: OpenWindows
 }
 
-export async function getBreakdown(groupBy: 'month' | 'year', year?: number): Promise<BreakdownResponse> {
+export async function getBreakdown(groupBy: 'month' | 'year', year?: number, tz?: string): Promise<BreakdownResponse> {
   const params: Record<string, string> = { groupBy }
   if (year !== undefined) params.year = String(year)
+  if (tz) params.tz = tz
   const res = await httpStats.get<BreakdownResponse>('/stats/breakdown', { params })
   return res.data
 }

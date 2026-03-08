@@ -56,8 +56,9 @@ public class StatsController {
     @GetMapping("/breakdown")
     public BreakdownResponseDto breakdown(
             @RequestParam(defaultValue = "month") String groupBy,
-            @RequestParam(required = false) Integer year) {
-        return svc.getBreakdown(currentUserId(), groupBy, year);
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) String tz) {
+        return svc.getBreakdown(currentUserId(), groupBy, year, tz);
     }
 
     @GetMapping("/insights")

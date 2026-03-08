@@ -63,7 +63,7 @@ public class InsightsService {
             Map<String, Object> statsData = new LinkedHashMap<>();
             statsData.put("summary_30d", statsService.getSummary(userId, 30));
             statsData.put("trend_12w", statsService.getTrend(userId, 12));
-            statsData.put("breakdown_current_year", statsService.getBreakdown(userId, "month", currentYear));
+            statsData.put("breakdown_current_year", statsService.getBreakdown(userId, "month", currentYear, null));
             statsData.put("role_distribution_current_year", statsService.getRoleCounts(userId, "month", currentYear));
 
             String statsJson = objectMapper.writeValueAsString(statsData);

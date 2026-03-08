@@ -22,8 +22,9 @@ export default function Dashboard() {
     if (USE_MOCK) { setLoading(false); return }
     setLoading(true); setError(null)
     const yearParam = groupBy === 'month' ? year : undefined
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
     Promise.all([
-      getBreakdown(groupBy, yearParam),
+      getBreakdown(groupBy, yearParam, tz),
       getRoleCounts(groupBy, yearParam),
     ])
       .then(([d, r]) => { if (!signal?.aborted) { setData(d); setRoleData(r); setLoading(false) } })

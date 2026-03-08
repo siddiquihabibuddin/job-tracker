@@ -54,46 +54,59 @@ A full-stack job application tracking platform built with a microservices archit
 JobTracker follows an **event-driven CQRS-like pattern** — writes and reads are handled by separate services, with Kafka as the messaging backbone.
 
 ```
-                        ┌─────────────────────────────────────────────────────────┐
-                        │                     Docker Network                      │
-                        │                                                         │
-  Browser               │   ┌──────────────────────────────────────────────────┐ │
-  :5173  ───────────────┼──▶│              API Gateway  :8080                  │ │
-                        │   │         Spring Cloud Gateway (WebFlux)           │ │
-                        │   └──────────┬───────────────────┬───────────────────┘ │
-                        │              │                   │                      │
-                        │   ┌──────────▼──────────┐  ┌────▼──────────────────┐  │
-                        │   │  Applications Svc   │  │     Stats Service     │  │
-                        │   │     :8081           │  │        :8082          │  │
-                        │   │  Spring Boot + JPA  │  │  Spring Boot + JDBC  │  │
-                        │   │  JWT Auth + Flyway  │  │  JWT Auth + Ollama   │  │
-                        │   └──────────┬──────────┘  └──────┬──────▲─────────┘  │
-                        │              │                     │      │             │
-                        │   ┌──────────▼──────────┐  ┌──────▼──┐  │             │
-                        │   │     PostgreSQL       │  │  Redis  │  │             │
-                        │   │     jt_apps :5432   │  │  :6379  │  │             │
-                        │   └─────────────────────┘  │ 5m TTL  │  │             │
-                        │                            └─────────┘  │             │
-                        │                                          │             │
-                        │   ┌──────────────────────┐  ┌───────────┴──────────┐  │
-                        │   │     PostgreSQL        │  │   Stats Listener     │  │
-                        │   │    jt_stats :5432  ◀─────┤      :8083           │  │
-                        │   └─────────────────────┘  │  Kafka Consumer      │  │
-                        │                            └───────────▲──────────┘  │
-                        │   ┌──────────────────────┐             │              │
-                        │   │    Apache Kafka       │─────────────┘              │
-                        │   │    (KRaft) :9092      │                            │
-                        │   └──────────▲───────────┘                            │
-                        │              │                                         │
-                        │   ┌──────────┴───────────┐  ┌────────────────────────┐ │
-                        │   │  OutboxPoller (5s)   │  │   Ollama  :11434       │ │
-                        │   │  reads outbox_events │  │  qwen2.5:1.5b          │ │
-                        │   │  → publishes to Kafka│  │  ▲ AI Insights (stats) │ │
-                        │   └──────────────────────┘  └────────────────────────┘ │
-                        │                                                         │
-                        │        Config Server :8888  Prometheus :9090            │
-                        │        Zipkin        :9411                              │
-                        └─────────────────────────────────────────────────────────┘
+  Host filesystem        ┌─────────────────────────────────────────────────────────┐
+  ~/csv-imports/  ───────┼──┐              Docker Network                          │
+  (HOST_CSV_FOLDER)      │  │ volume mount                                         │
+                         │  │ /app/csv-imports                                     │
+  Browser                │  │ ┌────────────────────────────────────────────────┐  │
+  :5173  ────────────────┼──┼▶│            API Gateway  :8080                  │  │
+                         │  │ │       Spring Cloud Gateway (WebFlux)           │  │
+                         │  │ └──────────┬──────────────────┬───────────────── ┘  │
+                         │  │            │                  │                      │
+                         │  │ ┌──────────▼──────────┐  ┌───▼───────────────────┐  │
+                         │  └▶│  Applications Svc   │  │    Stats Service      │  │
+                         │    │     :8081           │  │       :8082           │  │
+                         │    │  Spring Boot + JPA  │  │  Spring Boot + JDBC  │  │
+                         │    │  JWT Auth + Flyway  │  │  JWT Auth + Ollama   │  │
+                         │    │  CSV / Folder Import│  │  tz-aware KPI cards  │  │
+                         │    └──────────┬──────────┘  └──────┬──────▲────────┘  │
+                         │               │                     │      │            │
+                         │    ┌──────────▼──────────┐  ┌──────▼──┐   │            │
+                         │    │     PostgreSQL       │  │  Redis  │   │            │
+                         │    │    jt_apps :5432    │  │  :6379  │   │            │
+                         │    │  applications       │  │  5m TTL │   │            │
+                         │    │  outbox_events      │  │ 30m TTL │   │            │
+                         │    └─────────────────────┘  │(AI ins.)│   │            │
+                         │                             └─────────┘   │            │
+                         │                                            │            │
+                         │    ┌─────────────────────┐  ┌─────────────┴─────────┐  │
+                         │    │     PostgreSQL       │  │    Stats Listener     │  │
+                         │    │    jt_stats :5432 ◀─────┤       :8083           │  │
+                         │    │  applications_      │  │  Kafka Consumer       │  │
+                         │    │    snapshot         │  │  2 consumer groups:   │  │
+                         │    │  agg_monthly        │  │  stats-service        │  │
+                         │    │  agg_weekly         │  │  activity-service     │  │
+                         │    │  agg_role           │  └──────────▲────────────┘  │
+                         │    │  activity_feed      │             │               │
+                         │    │  stale_flags        │  ┌──────────┴────────────┐  │
+                         │    └─────────────────────┘  │    Apache Kafka       │  │
+                         │                             │    (KRaft) :9092      │  │
+                         │                             └──────────▲────────────┘  │
+                         │                                        │               │
+                         │    ┌───────────────────────┐           │               │
+                         │    │   OutboxPoller (5s)   │───────────┘               │
+                         │    │  reads outbox_events  │                           │
+                         │    │  → publishes to Kafka │                           │
+                         │    └───────────────────────┘                           │
+                         │                                                         │
+                         │    ┌───────────────────────┐  ┌─────────────────────┐  │
+                         │    │   Ollama  :11434      │  │   Config Server     │  │
+                         │    │  qwen2.5:1.5b         │  │      :8888          │  │
+                         │    │  AI Insights (stats)  │  │  Spring Cloud Config│  │
+                         │    └───────────────────────┘  └─────────────────────┘  │
+                         │                                                         │
+                         │         Prometheus :9090    Zipkin :9411               │
+                         └─────────────────────────────────────────────────────────┘
 ```
 
 ### Services
@@ -204,12 +217,21 @@ Response: { windowDays, totalApplied, byStatus: {...}, bySource: {...}, generate
 GET /v1/stats/trend?period=week&weeks=12
 Response: { period, points: [{ start, end, count }] }
 
-GET /v1/stats/breakdown?groupBy=month&year=2025
+GET /v1/stats/breakdown?groupBy=month&year=2025&tz=America/Phoenix
 GET /v1/stats/breakdown?groupBy=year
 Response: {
   groupBy, year,
   rows: [{ label, periodNum, totalApplied, totalRejected, totalOpen }],
-  openWindows: { last7d, last15d, last30d, last3m, last6m, last9m, last1y }
+  openWindows: { today, last7d, last15d, last30d, last3m, last6m, last9m, last1y }
+}
+# tz is the IANA timezone name sent by the browser (Intl.DateTimeFormat().resolvedOptions().timeZone)
+# openWindows.today counts active applications applied on the user's local calendar date
+
+GET /v1/stats/roles?groupBy=month&year=2025
+GET /v1/stats/roles?groupBy=year
+Response: {
+  groupBy, year,
+  rows: [{ label, periodNum, engineerDev, manager, architect, other }]
 }
 
 GET /v1/stats/insights
@@ -217,6 +239,10 @@ Response: { insights: ["...", "...", "..."], generatedAt }
 
 GET /v1/stats/activity/{appId}
 Response: [{ id, eventType, message, occurredAt }]
+
+GET /v1/stats/stale
+Response: [{ appId, company, role, status, daysSinceLastEvent, flaggedAt, appliedAt }]
+# Returns applications with no status change for 14+ days (ghosted / stale)
 ```
 
 Swagger UI available at `http://localhost:8081/swagger-ui.html` and `http://localhost:8082/swagger-ui.html`.
@@ -316,7 +342,9 @@ JobTracker/
 - `applications_snapshot` — denormalized projection of applications, kept in sync via Kafka; includes `applied_at` for accurate date-based analytics
 - `agg_monthly` — pre-computed application counts keyed by `(user_id, year, month, status)`; updated atomically on every Kafka event; enables `breakdown` and month-level open-window queries with a single indexed scan
 - `agg_weekly` — pre-computed weekly counts keyed by `(user_id, week_start)`; updated atomically on every Kafka event; enables `trend` queries with a fast indexed range scan
+- `agg_role` — pre-computed application counts keyed by `(user_id, year, month, category)`; category is one of `ENGINEER_DEV`, `MANAGER`, `ARCHITECT`, `OTHER`; powers the role breakdown chart
 - `activity_feed` — per-application event timeline; one row per Kafka event, translated to a human-readable message; idempotent via unique constraint on `(app_id, event_type, occurred_at)`
+- `stale_flags` — tracks applications with no status change for 14+ days; populated by a scheduled job in `stats-listener`; powers the "Possibly Ghosting" section on the dashboard
 
 All schema changes are managed by Flyway migrations (`ddl-auto: validate`).
 

@@ -18,7 +18,7 @@ import { useDebounce } from '../hooks/useDebounce'
 
 const USE_MOCK = (import.meta.env.VITE_USE_MOCK ?? 'true') === 'true'
 const STATUSES: (AppStatus | 'ALL')[] = ['ALL', 'APPLIED', 'PHONE', 'ONSITE', 'OFFER', 'REJECTED', 'ACCEPTED', 'WITHDRAWN']
-const PAGE_SIZE = 20
+const PAGE_SIZE = 10
 
 const STATUS_COLORS: Record<string, string> = {
   APPLIED:   '#3b82f6',

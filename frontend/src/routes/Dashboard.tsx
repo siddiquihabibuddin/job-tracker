@@ -136,7 +136,6 @@ export default function Dashboard() {
           </article>
         ))}
       </div>
-      <p style={{ fontSize: '0.7rem', color: 'var(--pico-muted-color)', marginBottom: '1rem', marginTop: 0 }}>Open applications (excl. Rejected / Accepted / Withdrawn)</p>
 
       {error && <article><header>Error</header><p>{error}</p></article>}
       {loading && <article aria-busy="true"><p>Loading…</p></article>}
@@ -281,9 +280,6 @@ export default function Dashboard() {
             const hasAnyRole = totals.eng + totals.mgr + totals.arc + totals.oth > 0
             return (
               <article style={{ padding: '0', marginBottom: 0 }}>
-                <header style={{ fontSize: '0.78rem', fontWeight: 600, padding: '0.65rem 0.65rem 0.3rem' }}>
-                  Role Breakdown {groupBy === 'month' ? `(${year})` : '(all years)'}
-                </header>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
                   <thead>
                     <tr>

@@ -18,6 +18,10 @@ A full-stack job application tracking platform built with a microservices archit
 |---|---|
 | ![Application Detail](docs/screenshots/view-application.png?raw=true) | ![New Application](docs/screenshots/new-application.png?raw=true) |
 
+| Grafana Dashboard | Prometheus Targets |
+|---|---|
+| ![Grafana Dashboard](docs/screenshots/grafana-dashboard.png?raw=true) | ![Prometheus Targets](docs/screenshots/prometheus-targets.png?raw=true) |
+
 ---
 
 ## Tech Stack

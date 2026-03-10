@@ -45,6 +45,7 @@ A full-stack job application tracking platform built with a microservices archit
 ![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=flat-square&logo=redis)
 ![Ollama](https://img.shields.io/badge/Ollama-LLM-000000?style=flat-square)
 ![Prometheus](https://img.shields.io/badge/Prometheus-monitoring-E6522C?style=flat-square&logo=prometheus)
+![Grafana](https://img.shields.io/badge/Grafana-11.0-F46800?style=flat-square&logo=grafana)
 ![Zipkin](https://img.shields.io/badge/Zipkin-tracing-FE7139?style=flat-square)
 
 ---
@@ -105,7 +106,7 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
                          │    │  AI Insights (stats)  │  │  Spring Cloud Config│  │
                          │    └───────────────────────┘  └─────────────────────┘  │
                          │                                                         │
-                         │         Prometheus :9090    Zipkin :9411               │
+                         │    Prometheus :9090   Grafana :3000   Zipkin :9411      │
                          └─────────────────────────────────────────────────────────┘
 ```
 
@@ -123,6 +124,7 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
 | **Redis** | 6379 | Cache for stats endpoints (5-min TTL) and AI insights (30-min TTL) |
 | **Ollama** | 11434 | Local LLM server — serves `qwen2.5:1.5b` for AI insights generation |
 | **Prometheus** | 9090 | Scrapes `/actuator/prometheus` from all Spring Boot services |
+| **Grafana** | 3000 | Pre-built dashboard: request rates, JVM heap, HTTP latency, Kafka lag |
 | **Zipkin** | 9411 | Distributed tracing, 100% sampling |
 
 ### Event Flow
@@ -313,6 +315,9 @@ JobTracker/
 │   ├── docker-compose.yml      # Full infrastructure definition
 │   ├── init-db.sql             # Creates jt_stats DB (runs on fresh volume)
 │   ├── prometheus.yml          # Prometheus scrape config
+│   ├── grafana/                # Grafana provisioning
+│   │   ├── provisioning/       # Auto-wired datasource + dashboard loader
+│   │   └── dashboards/         # Pre-built Job Tracker dashboard JSON
 │   ├── .env.example            # Required environment variables
 │   └── .gitignore
 └── frontend/
@@ -383,13 +388,15 @@ mvn test -Dtest=ApplicationsServiceTest
 
 ## Observability
 
-| Tool | URL | Description |
-|---|---|---|
-| Prometheus | http://localhost:9090 | Metrics for all Spring Boot services |
-| Zipkin | http://localhost:9411 | Distributed trace viewer |
-| Actuator (apps) | http://localhost:8081/actuator | Health, metrics, Prometheus endpoint |
-| Actuator (stats) | http://localhost:8082/actuator | Health, metrics, Prometheus endpoint |
+| Tool | URL | Credentials | Description |
+|---|---|---|---|
+| Grafana | http://localhost:3000 | admin / admin | Pre-built dashboard: app rates, JVM heap, HTTP latency p99, Kafka consumer lag |
+| Prometheus | http://localhost:9090 | — | Scrapes all 3 Spring Boot services every 15s; data persisted via named volume |
+| Zipkin | http://localhost:9411 | — | Distributed trace viewer, 100% sampling |
+| Actuator (apps) | http://localhost:8081/actuator | — | Health, metrics, Prometheus endpoint |
+| Actuator (stats) | http://localhost:8082/actuator | — | Health, metrics, Prometheus endpoint |
+| Actuator (listener) | http://localhost:8083/actuator | — | Health, metrics, Prometheus endpoint |
 
-Custom Micrometer counters: `applications.created.total`, `applications.deleted.total`, `stats.queries.total`
+Custom Micrometer counters: `applications_total`, `applications_deleted_total`, `stats_queries_total`
 
 All services emit structured logs with a `correlationId` and `traceId` included in every log line.

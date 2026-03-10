@@ -167,7 +167,8 @@ public class ApplicationService {
                 saved.getCreatedAt(),
                 null,
                 OffsetDateTime.now(),
-                saved.getAppliedAt())));
+                saved.getAppliedAt(),
+                saved.isGotCall())));
 
         createdCounter.increment();
         return mapper.toDto(saved);
@@ -217,7 +218,8 @@ public class ApplicationService {
                 a.getCreatedAt(),
                 a.getDeletedAt(),
                 OffsetDateTime.now(),
-                a.getAppliedAt())));
+                a.getAppliedAt(),
+                a.isGotCall())));
 
         return mapper.toDto(a);
     }
@@ -240,7 +242,8 @@ public class ApplicationService {
                 a.getCreatedAt(),
                 null,
                 OffsetDateTime.now(),
-                a.getAppliedAt()))));
+                a.getAppliedAt(),
+                a.isGotCall()))));
     }
 
     @Transactional
@@ -260,7 +263,8 @@ public class ApplicationService {
                 a.getCreatedAt(),
                 a.getDeletedAt(),
                 OffsetDateTime.now(),
-                a.getAppliedAt())));
+                a.getAppliedAt(),
+                a.isGotCall())));
 
         deletedCounter.increment();
     }

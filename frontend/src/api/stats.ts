@@ -12,6 +12,7 @@ export interface TrendPoint {
   start: string
   end: string
   count: number
+  callsCount: number
 }
 
 export async function getSummary(window: 7 | 30): Promise<StatsSummary> {
@@ -19,8 +20,8 @@ export async function getSummary(window: 7 | 30): Promise<StatsSummary> {
   return res.data
 }
 
-export async function getTrend(weeks = 12): Promise<TrendPoint[]> {
-  const res = await httpStats.get<{ period: string; points: TrendPoint[] }>(`/stats/trend`, { params: { period: 'week', weeks } })
+export async function getTrend(period = 'week', weeks = 12): Promise<TrendPoint[]> {
+  const res = await httpStats.get<{ period: string; points: TrendPoint[] }>(`/stats/trend`, { params: { period, weeks } })
   return res.data.points
 }
 

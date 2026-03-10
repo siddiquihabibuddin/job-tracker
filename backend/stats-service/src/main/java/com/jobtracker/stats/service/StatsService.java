@@ -82,12 +82,12 @@ public class StatsService {
         LocalDate currentWeekMonday = LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         LocalDate windowStart = currentWeekMonday.minusWeeks(weeks - 1);
 
-        Map<LocalDate, Long> dbResults = new LinkedHashMap<>();
+        Map<LocalDate, long[]> dbResults = new LinkedHashMap<>();
         jdbc.query(
-                "SELECT week_start, cnt FROM agg_weekly WHERE user_id=? AND week_start >= ? ORDER BY week_start",
+                "SELECT week_start, cnt, calls_cnt FROM agg_weekly WHERE user_id=? AND week_start >= ? ORDER BY week_start",
                 (RowCallbackHandler) rs -> {
                     LocalDate weekStart = rs.getObject(1, LocalDate.class);
-                    dbResults.put(weekStart, rs.getLong(2));
+                    dbResults.put(weekStart, new long[]{rs.getLong(2), rs.getLong(3)});
                 },
                 userId, Date.valueOf(windowStart));
 
@@ -95,8 +95,8 @@ public class StatsService {
         for (int i = weeks - 1; i >= 0; i--) {
             LocalDate weekStart = currentWeekMonday.minusWeeks(i);
             LocalDate weekEnd = weekStart.plusDays(6);
-            long count = dbResults.getOrDefault(weekStart, 0L);
-            points.add(new TrendPointDto(weekStart.format(DATE_FMT), weekEnd.format(DATE_FMT), count));
+            long[] row = dbResults.getOrDefault(weekStart, new long[]{0L, 0L});
+            points.add(new TrendPointDto(weekStart.format(DATE_FMT), weekEnd.format(DATE_FMT), row[0], row[1]));
         }
 
         return new TrendResponseDto("week", points);

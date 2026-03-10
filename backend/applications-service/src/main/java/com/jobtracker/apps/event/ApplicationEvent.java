@@ -14,5 +14,6 @@ public record ApplicationEvent(
         OffsetDateTime createdAt,
         OffsetDateTime deletedAt,
         OffsetDateTime occurredAt,
-        java.time.LocalDate appliedAt) {
+        java.time.LocalDate appliedAt,
+        Boolean gotCall) {
 }

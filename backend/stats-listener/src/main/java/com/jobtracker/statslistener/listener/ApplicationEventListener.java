@@ -38,10 +38,11 @@ public class ApplicationEventListener {
             switch (event.eventType()) {
                 case "APPLICATION_CREATED" -> {
                     jdbc.update(
-                            "INSERT INTO applications_snapshot (id, user_id, status, source, created_at, deleted_at, applied_at, role) " +
-                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING",
+                            "INSERT INTO applications_snapshot (id, user_id, status, source, created_at, deleted_at, applied_at, role, got_call) " +
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING",
                             event.id(), event.userId(), event.status(), event.source(),
-                            toTs(event.createdAt()), toTs(event.deletedAt()), event.appliedAt(), event.role());
+                            toTs(event.createdAt()), toTs(event.deletedAt()), event.appliedAt(), event.role(),
+                            event.gotCall() != null && event.gotCall());
                     jdbc.update(
                             "UPDATE applications_snapshot SET last_event_at = ?, company = ? WHERE id = ?",
                             toTs(event.occurredAt()), event.company(), event.id());
@@ -53,11 +54,12 @@ public class ApplicationEventListener {
                 case "APPLICATION_UPDATED" -> {
                     LocalDate oldDate = readEffectiveDate(event.id());
                     jdbc.update(
-                            "INSERT INTO applications_snapshot (id, user_id, status, source, created_at, deleted_at, applied_at, role) " +
-                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE " +
-                            "SET status = EXCLUDED.status, source = EXCLUDED.source, deleted_at = EXCLUDED.deleted_at, applied_at = EXCLUDED.applied_at, role = EXCLUDED.role",
+                            "INSERT INTO applications_snapshot (id, user_id, status, source, created_at, deleted_at, applied_at, role, got_call) " +
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE " +
+                            "SET status = EXCLUDED.status, source = EXCLUDED.source, deleted_at = EXCLUDED.deleted_at, applied_at = EXCLUDED.applied_at, role = EXCLUDED.role, got_call = EXCLUDED.got_call",
                             event.id(), event.userId(), event.status(), event.source(),
-                            toTs(event.createdAt()), toTs(event.deletedAt()), event.appliedAt(), event.role());
+                            toTs(event.createdAt()), toTs(event.deletedAt()), event.appliedAt(), event.role(),
+                            event.gotCall() != null && event.gotCall());
                     jdbc.update(
                             "UPDATE applications_snapshot SET last_event_at = ?, company = ? WHERE id = ?",
                             toTs(event.occurredAt()), event.company(), event.id());
@@ -139,10 +141,11 @@ public class ApplicationEventListener {
         LocalDate weekStart = anyDateInWeek.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         jdbc.update("DELETE FROM agg_weekly WHERE user_id=? AND week_start=?", userId, Date.valueOf(weekStart));
         jdbc.update("""
-                INSERT INTO agg_weekly (user_id, week_start, cnt)
+                INSERT INTO agg_weekly (user_id, week_start, cnt, calls_cnt)
                 SELECT user_id,
                        date_trunc('week', COALESCE(applied_at, created_at::date))::date,
-                       COUNT(*)
+                       COUNT(*),
+                       COUNT(*) FILTER (WHERE got_call = true)
                 FROM applications_snapshot
                 WHERE user_id=? AND deleted_at IS NULL
                   AND date_trunc('week', COALESCE(applied_at, created_at::date))::date=?

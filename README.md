@@ -110,7 +110,15 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
                          │    │  AI Insights (stats)  │  │  Spring Cloud Config│  │
                          │    └───────────────────────┘  └─────────────────────┘  │
                          │                                                         │
-                         │    Prometheus :9090   Grafana :3000   Zipkin :9411      │
+                         │    ┌─────────────────────┐  ┌──────────────────────┐  │
+                         │    │  Prometheus  :9090   │◀─┤   Grafana  :3000     │  │
+                         │    │  scrapes /actuator/  │  │  pre-built dashboard │  │
+                         │    │  prometheus (15s)    │  │  JVM · HTTP · Kafka  │  │
+                         │    └──────────▲───────────┘  └──────────────────────┘  │
+                         │               │ metrics                                 │
+                         │    applications-service · stats-service · stats-listener│
+                         │                                                         │
+                         │    Zipkin :9411  (distributed tracing, 100% sampling)  │
                          └─────────────────────────────────────────────────────────┘
 ```
 

@@ -12,4 +12,4 @@ export const STATUS_COLORS: Record<string, string> = {
   WITHDRAWN: '#6b7280',
 }
 
-export const PAGE_SIZE = 10
+export const PAGE_SIZE = 20

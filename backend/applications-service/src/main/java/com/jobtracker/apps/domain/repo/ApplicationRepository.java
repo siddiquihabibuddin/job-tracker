@@ -7,9 +7,13 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
+import java.time.LocalDate;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ApplicationRepository extends JpaRepository<Application, UUID>, JpaSpecificationExecutor<Application> {
     Page<Application> findAllByUser_IdAndDeletedAtIsNull(UUID userId, Pageable pageable);
     Page<Application> findAllByUser_IdAndStatusAndDeletedAtIsNull(UUID userId, AppStatus status, Pageable pageable);
+    Optional<Application> findByUser_IdAndCompanyIgnoreCaseAndRoleIgnoreCaseAndAppliedAtAndResumeUploadedAndDeletedAtIsNull(
+            UUID userId, String company, String role, LocalDate appliedAt, String resumeUploaded);
 }

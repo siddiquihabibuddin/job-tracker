@@ -18,6 +18,9 @@ export default function FolderImportModal({ show, result, onClose }: Props) {
         <header>
           <strong>Bulk Import — {result.totalFiles} file{result.totalFiles !== 1 ? 's' : ''}</strong>
           <span style={{ marginLeft: '1rem', color: '#22c55e' }}>✓ {result.totalImported} imported</span>
+          {result.totalUpdated > 0 && (
+            <span style={{ marginLeft: '0.75rem', color: '#f59e0b' }}>↻ {result.totalUpdated} updated</span>
+          )}
           {result.totalFailed > 0 && (
             <span style={{ marginLeft: '0.75rem', color: '#ef4444' }}>✗ {result.totalFailed} failed</span>
           )}
@@ -32,6 +35,7 @@ export default function FolderImportModal({ show, result, onClose }: Props) {
                   <span style={{ fontWeight: 500 }}>{f.fileName}</span>
                   <span>
                     <span style={{ color: '#22c55e' }}>✓ {f.imported}</span>
+                    {f.updated > 0 && <span style={{ color: '#f59e0b', marginLeft: '0.5rem' }}>↻ {f.updated}</span>}
                     {f.failed > 0 && <span style={{ color: '#ef4444', marginLeft: '0.5rem' }}>✗ {f.failed}</span>}
                   </span>
                 </div>

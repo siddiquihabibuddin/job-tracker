@@ -111,7 +111,7 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
                          │    └───────────────────────┘  └─────────────────────┘  │
                          │                                                         │
                          │    ┌─────────────────────┐  ┌──────────────────────┐  │
-                         │    │  Prometheus  :9090   │◀─┤   Grafana  :3000     │  │
+                         │    │  Prometheus  :9090   │◀─┤   Grafana  :3001     │  │
                          │    │  scrapes /actuator/  │  │  pre-built dashboard │  │
                          │    │  prometheus (15s)    │  │  JVM · HTTP · Kafka  │  │
                          │    └──────────▲───────────┘  └──────────────────────┘  │
@@ -136,7 +136,7 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
 | **Redis** | 6379 | Cache for stats endpoints (5-min TTL) and AI insights (30-min TTL) |
 | **Ollama** | 11434 | Local LLM server — serves `qwen2.5:1.5b` for AI insights generation |
 | **Prometheus** | 9090 | Scrapes `/actuator/prometheus` from all Spring Boot services |
-| **Grafana** | 3000 | Pre-built dashboard: request rates, JVM heap, HTTP latency, Kafka lag |
+| **Grafana** | 3001 | Pre-built dashboard: request rates, JVM heap, HTTP latency, Kafka lag |
 | **Zipkin** | 9411 | Distributed tracing, 100% sampling |
 
 ### Event Flow
@@ -158,8 +158,8 @@ This is the **Transactional Outbox Pattern** — Kafka being down never causes d
 - **User registration & login** — `POST /v1/auth/register` creates a new account (BCrypt-hashed password, immediate JWT); `POST /v1/auth/token` authenticates existing users; all credentials stored in the `users` table — no hardcoded demo users
 - **JWT Authentication** — HS256 token-based auth, enforced by Spring Security on all services; each user sees only their own data
 - **Full CRUD** — Create, read, update, and soft-delete job applications with rich fields: apply date, salary range, job link, call received, reject date, resume, login details, notes
-- **CSV Import** — Bulk import applications from a spreadsheet export; handles quoted commas, multiple date formats, salary parsing (`$50K`, `50,000–80,000`), and flexible status mapping (`Open` → APPLIED, `Closed` → REJECTED, Open + Call → PHONE)
-- **Folder-based Bulk Import** — Drop CSV files into a configured host folder (`HOST_CSV_FOLDER` in `.env`, mounted into the container at `/app/csv-imports`) and click "Bulk Import" in the UI. Each file is processed individually and moved to a `processed/` subfolder after import. The results modal shows per-file imported/failed counts with expandable row-level errors
+- **CSV Import** — Bulk import applications from a spreadsheet export; handles quoted commas, multiple date formats, salary parsing (`$50K`, `50,000–80,000`), and flexible status mapping (`Open` → APPLIED, `Closed` → REJECTED, Open + Call → PHONE). Re-importing the same file is safe: rows with a matching `(company, role, applied_at, resume_uploaded)` key are updated instead of duplicated; rows missing `applied_at` or `resume_uploaded` are always inserted. The response includes an `updated` count alongside `imported` and `failed`
+- **Folder-based Bulk Import** — Drop CSV files into a configured host folder (`HOST_CSV_FOLDER` in `.env`, mounted into the container at `/app/csv-imports`) and click "Bulk Import" in the UI. Each file is processed individually and moved to a `processed/` subfolder after import. The results modal shows per-file imported/updated/failed counts with expandable row-level errors. Same deduplication logic applies per file
 - **Bulk delete** — Select any number of applications via per-row checkboxes or the select-all header checkbox, then delete them all in one click; deletions are fired in parallel and the list updates immediately
 - **Advanced filtering** — Filter applications by status, search (company/role), month, year, and call received; sort by apply date or date added; page-based pagination (20 per page)
 - **Activity Feed** — Each Application Detail page shows a live activity timeline. Every create, status update, and deletion is translated into a human-readable message (e.g. "Applied for SWE at Google via LinkedIn", "Status changed to OFFER") and stored in the `activity_feed` table. Powered by Kafka fan-out: a second consumer group (`activity-service`) runs in `stats-listener` alongside the existing `stats-service` group, tracking independent offsets on the same `application-events` topic — no producer changes required. Idempotent via a unique constraint on `(app_id, event_type, occurred_at)`
@@ -220,7 +220,7 @@ Application statuses: `APPLIED` → `PHONE` → `ONSITE` → `OFFER` → `ACCEPT
 Company,Role,Location,Salary Range,Apply Date,Final Status,Job Link,Resume Uploaded,Call,Reject Date,Login Details,Days pending
 ```
 
-Response: `{ imported: N, failed: M, errors: ["row 3: ...", ...] }`
+Response: `{ imported: N, updated: M, failed: K, errors: ["row 3: ...", ...] }`
 
 ### Analytics
 
@@ -402,7 +402,7 @@ mvn test -Dtest=ApplicationsServiceTest
 
 | Tool | URL | Credentials | Description |
 |---|---|---|---|
-| Grafana | http://localhost:3000 | admin / admin | Pre-built dashboard: app rates, JVM heap, HTTP latency p99, Kafka consumer lag |
+| Grafana | http://localhost:3001 | admin / admin | Pre-built dashboard: app rates, JVM heap, HTTP latency p99, Kafka consumer lag |
 | Prometheus | http://localhost:9090 | — | Scrapes all 3 Spring Boot services every 15s; data persisted via named volume |
 | Zipkin | http://localhost:9411 | — | Distributed trace viewer, 100% sampling |
 | Actuator (apps) | http://localhost:8081/actuator | — | Health, metrics, Prometheus endpoint |

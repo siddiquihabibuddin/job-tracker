@@ -28,7 +28,7 @@ export function registerUnauthorizedHandler(handler: () => void) {
 function attachInterceptors(instance: typeof httpApps) {
   instance.interceptors.request.use((cfg) => {
     const t = getToken()
-    if (t) (cfg.headers ||= {}).Authorization = `Bearer ${t}`
+    if (t) (cfg.headers as Record<string, string>).Authorization = `Bearer ${t}`
     return cfg
   })
 

@@ -1,26 +1,34 @@
-import { FormEvent, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, type FormEvent } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { createMockApplication, type AppStatus as MockAppStatus } from '../mocks/applications'
 import { createApplication as apiCreate, type AppStatus } from '../api/applications'
 
 const USE_MOCK = (import.meta.env.VITE_USE_MOCK ?? 'true') === 'true'
 
+interface LocationState {
+  company?: string
+  role?: string
+  jobLink?: string
+}
+
 export default function NewApplication() {
   const nav = useNavigate()
+  const location = useLocation()
+  const prefill = (location.state as LocationState) ?? {}
 
   // Required fields
-  const [company, setCompany] = useState('')
-  const [role, setRole] = useState('')
+  const [company, setCompany] = useState(prefill.company ?? '')
+  const [role, setRole] = useState(prefill.role ?? '')
   const [status, setStatus] = useState<AppStatus>('APPLIED')
   const [source, setSource] = useState('LinkedIn')
 
   // Optional fields
-  const [location, setLocation] = useState('')
+  const [locationField, setLocationField] = useState('')
   const [appliedAt, setAppliedAt] = useState('')
   const [salaryMin, setSalaryMin] = useState('')
   const [salaryMax, setSalaryMax] = useState('')
   const [currency, setCurrency] = useState('USD')
-  const [jobLink, setJobLink] = useState('')
+  const [jobLink, setJobLink] = useState(prefill.jobLink ?? '')
   const [resumeUploaded, setResumeUploaded] = useState('')
   const [gotCall, setGotCall] = useState(false)
   const [rejectDate, setRejectDate] = useState('')
@@ -52,7 +60,7 @@ export default function NewApplication() {
           role: role.trim(),
           status,
           source: source || undefined,
-          location: location.trim() || undefined,
+          location: locationField.trim() || undefined,
           appliedAt: appliedAt || undefined,
           salary: {
             min: salaryMin ? Number(salaryMin) : undefined,
@@ -140,8 +148,8 @@ export default function NewApplication() {
             <label>
               Location
               <input
-                value={location}
-                onChange={e => setLocation(e.target.value)}
+                value={locationField}
+                onChange={e => setLocationField(e.target.value)}
                 placeholder="San Francisco, CA"
               />
             </label>

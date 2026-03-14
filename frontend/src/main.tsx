@@ -13,6 +13,7 @@ import Profile from './routes/Profile'
 import Login from './routes/Login'
 import Register from './routes/Register'
 import ErrorPage from './routes/ErrorPage'
+import Alerts from './routes/Alerts'
 import { AuthProvider } from './auth/AuthContext'
 import RequireAuth from './auth/RequireAuth'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -35,6 +36,7 @@ const router = createBrowserRouter([
           { path: 'applications', element: <Applications /> },
           { path: 'applications/new', element: <NewApplication /> },
           { path: 'applications/:id', element: <ApplicationDetail /> },
+          { path: 'alerts', element: <Alerts /> },
           { path: 'profile', element: <Profile /> },
         ],
       },

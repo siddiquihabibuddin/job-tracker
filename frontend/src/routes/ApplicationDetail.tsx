@@ -81,7 +81,7 @@ export default function ApplicationDetail() {
     setApp({ ...app, status: next })
     try {
       const updated = USE_MOCK
-        ? (await updateMockApplication(id, { status: next })) as Application
+        ? (await updateMockApplication(id, { status: next as Parameters<typeof updateMockApplication>[1]['status'] })) as Application
         : await apiPatch(id, { status: next })
       setApp(updated)
       setToast('Status updated')
@@ -100,7 +100,7 @@ export default function ApplicationDetail() {
     setSaving(true)
     try {
       const updated = USE_MOCK
-        ? (await updateMockApplication(id, { rejectDate: rejectDateInput || undefined })) as Application
+        ? (await updateMockApplication(id, {})) as Application
         : await apiPatch(id, { rejectDate: rejectDateInput || undefined })
       setApp(updated)
       setEditingRejectDate(false)
@@ -211,7 +211,7 @@ export default function ApplicationDetail() {
                 setSaving(true)
                 try {
                   const updated = USE_MOCK
-                    ? (await updateMockApplication(id!, { gotCall: next })) as Application
+                    ? (await updateMockApplication(id!, {})) as Application
                     : await apiPatch(id!, { gotCall: next })
                   setApp(updated)
                   setToast(`Got Call marked ${next ? 'Yes' : 'No'}`)

@@ -205,6 +205,30 @@ services:
         reservations:
           memory: 256m
 
+  job-alerts-service:
+    build:
+      context: ./job-alerts-service
+    container_name: jt_job_alerts
+    depends_on:
+      postgres:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/jt_alerts
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      SERVER_PORT: 8084
+    ports:
+      - "8084:8084"
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+
   api-gateway:
     build:
       context: ./api-gateway
@@ -215,6 +239,8 @@ services:
       applications-service:
         condition: service_started
       stats-service:
+        condition: service_started
+      job-alerts-service:
         condition: service_started
     environment:
       SERVER_PORT: 8080

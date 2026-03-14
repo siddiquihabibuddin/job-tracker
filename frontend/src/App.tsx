@@ -1,10 +1,19 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import './index.css'
 import { useAuth } from './auth/AuthContext'
+import { useQuery } from '@tanstack/react-query'
+import { getUnseenCount } from './api/alerts'
 
 export default function App() {
   const { user, signOut } = useAuth()
   const nav = useNavigate()
+
+  const { data: unseenCount = 0 } = useQuery({
+    queryKey: ['unseen-count'],
+    queryFn: getUnseenCount,
+    refetchInterval: 5 * 60 * 1000,
+    enabled: !!user,
+  })
 
   return (
     <div className="app">
@@ -18,6 +27,22 @@ export default function App() {
               <>
                 <li><NavLink to="/dashboard">Dashboard</NavLink></li>
                 <li><NavLink to="/applications">Applications</NavLink></li>
+                <li>
+                  <NavLink to="/alerts">
+                    Alerts{unseenCount > 0 && (
+                      <span style={{
+                        marginLeft: '0.35rem',
+                        background: '#2563eb',
+                        color: '#fff',
+                        borderRadius: '9999px',
+                        fontSize: '0.65rem',
+                        padding: '0.1rem 0.4rem',
+                        fontWeight: 700,
+                        verticalAlign: 'middle',
+                      }}>{unseenCount}</span>
+                    )}
+                  </NavLink>
+                </li>
                 <li><NavLink to="/profile">Profile</NavLink></li>
                 <li><small>{user.email}</small></li>
                 <li>

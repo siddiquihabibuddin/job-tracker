@@ -334,9 +334,17 @@ export default function Alerts() {
 
   function updateCompany(index: number, field: keyof CompanyInput, value: string | number) {
     setFormData(prev => {
-      const companies = prev.companies.map((c, i) =>
-        i === index ? { ...c, [field]: value } : c
-      )
+      const companies = prev.companies.map((c, i) => {
+        if (i !== index) return c
+        const updated = { ...c, [field]: value }
+        if (field === 'companyName' && typeof value === 'string') {
+          const slug = value.toLowerCase().replace(/\s+/g, '')
+          const prevSlug = c.companyName.toLowerCase().replace(/\s+/g, '')
+          if (!c.boardToken || c.boardToken === prevSlug) updated.boardToken = slug
+          if (!c.workdayTenant || c.workdayTenant === prevSlug) updated.workdayTenant = slug
+        }
+        return updated
+      })
       return { ...prev, companies }
     })
   }
@@ -577,39 +585,34 @@ export default function Alerts() {
                             <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{company.companyName}</span>
                             {company.lastErrorMessage && company.lastErrorAt && (
                               <div style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.3rem',
-                                marginTop: '0.15rem',
-                                padding: '0.15rem 0.4rem',
+                                marginTop: '0.25rem',
+                                padding: '0.35rem 0.5rem',
                                 background: 'rgba(217,119,6,0.08)',
                                 borderRadius: '4px',
-                                maxWidth: 'max-content',
+                                borderLeft: '2px solid #d97706',
                               }}>
-                                <svg
-                                  aria-hidden="true"
-                                  width="11"
-                                  height="11"
-                                  viewBox="0 0 16 16"
-                                  fill="currentColor"
-                                  style={{ color: '#b45309', flexShrink: 0 }}
-                                >
-                                  <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 3a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 8 4zm0 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2z" />
-                                </svg>
-                                <span style={{
-                                  fontSize: '0.68rem',
-                                  color: '#b45309',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                  maxWidth: '28ch',
-                                  cursor: 'default',
-                                }} title={company.lastErrorMessage}>
-                                  {company.lastErrorMessage}
-                                </span>
-                                <span style={{ fontSize: '0.68rem', color: '#b45309', opacity: 0.7, flexShrink: 0 }}>
-                                  · {relativeTime(company.lastErrorAt)}
-                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.25rem' }}>
+                                  <svg aria-hidden="true" width="11" height="11" viewBox="0 0 16 16" fill="currentColor" style={{ color: '#b45309', flexShrink: 0 }}>
+                                    <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 3a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 8 4zm0 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2z" />
+                                  </svg>
+                                  <span style={{ fontSize: '0.68rem', color: '#b45309', opacity: 0.75 }}>
+                                    Poll errors · {relativeTime(company.lastErrorAt)}
+                                  </span>
+                                </div>
+                                {company.lastErrorMessage.split('\n').map((line, li) => {
+                                  const sep = line.indexOf(': ')
+                                  const platform = sep !== -1 ? line.slice(0, sep) : null
+                                  const message = sep !== -1 ? line.slice(sep + 2) : line
+                                  const knownPlatform = platform && PLATFORMS.includes(platform)
+                                  return (
+                                    <div key={li} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem', marginTop: li > 0 ? '0.2rem' : 0 }}>
+                                      {knownPlatform && <PlatformBadge platform={platform!} />}
+                                      <span style={{ fontSize: '0.72rem', color: '#92400e', wordBreak: 'break-word', flex: 1 }}>
+                                        {message}
+                                      </span>
+                                    </div>
+                                  )
+                                })}
                               </div>
                             )}
                           </div>

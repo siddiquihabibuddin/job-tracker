@@ -87,7 +87,7 @@ export default function Applications() {
       setError(null)
       try {
         if (USE_MOCK) {
-          const data = await mockList({ status, search: debouncedSearch })
+          const data = await mockList({ status: status as 'ALL' | undefined, search: debouncedSearch })
           if (alive) {
             setRows(data as Application[])
             setTotalPages(1)

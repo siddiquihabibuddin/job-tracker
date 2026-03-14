@@ -30,6 +30,10 @@ spring:
               uri: http://stats-service:8082
               predicates:
                 - Path=/v1/stats/**
+            - id: alerts-service
+              uri: http://job-alerts-service:8084
+              predicates:
+                - Path=/v1/alerts/**
 
 server:
   port: 8080

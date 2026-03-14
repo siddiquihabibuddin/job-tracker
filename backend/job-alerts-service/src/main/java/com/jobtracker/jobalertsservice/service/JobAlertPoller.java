@@ -20,8 +20,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Component
 @ConditionalOnProperty(name = "job-alerts.poller.enabled", havingValue = "true", matchIfMissing = true)
@@ -56,8 +59,7 @@ public class JobAlertPoller {
         for (JobAlert alert : activeAlerts) {
             String[] keywords = alert.getRoleKeywords().toLowerCase().split(",");
             for (AlertCompany company : alert.getCompanies()) {
-                boolean anyError = false;
-                String lastErrorMessage = null;
+                Map<String, String> platformErrors = new LinkedHashMap<>();
 
                 for (String platformStr : alert.getPlatforms().split(",")) {
                     String p = platformStr.trim().toUpperCase();
@@ -76,8 +78,7 @@ public class JobAlertPoller {
                     };
 
                     if (result.hasError()) {
-                        anyError = true;
-                        lastErrorMessage = result.errorMessage();
+                        platformErrors.put(p, result.errorMessage());
                     }
 
                     for (JobPosting posting : result.postings()) {
@@ -103,8 +104,11 @@ public class JobAlertPoller {
                     }
                 }
 
-                if (anyError) {
-                    company.setLastErrorMessage(lastErrorMessage);
+                if (!platformErrors.isEmpty()) {
+                    String combined = platformErrors.entrySet().stream()
+                            .map(e -> e.getKey() + ": " + e.getValue())
+                            .collect(Collectors.joining("\n"));
+                    company.setLastErrorMessage(combined);
                     company.setLastErrorAt(OffsetDateTime.now());
                 } else {
                     company.setLastErrorMessage(null);

@@ -9,6 +9,7 @@ import RoleBreakdownTable from '../components/dashboard/RoleBreakdownTable'
 import RoleKpiCards from '../components/dashboard/RoleKpiCards'
 import AiInsightsCard from '../components/dashboard/AiInsightsCard'
 import GhostingTracker from '../components/dashboard/GhostingTracker'
+import { AlertsWidget } from '../components/dashboard/AlertsWidget'
 
 const USE_MOCK = (import.meta.env.VITE_USE_MOCK ?? 'true') === 'true'
 const CURRENT_YEAR = new Date().getFullYear()
@@ -119,7 +120,7 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Col 3: Role KPI cards + AI Insights + Ghosting */}
+        {/* Col 3: Role KPI cards + AI Insights + Ghosting + Alerts */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           <RoleKpiCards
             roleData={roleData}
@@ -128,6 +129,9 @@ export default function Dashboard() {
             loading={loading}
             error={error}
           />
+          {!USE_MOCK && (
+            <AlertsWidget />
+          )}
           {!USE_MOCK && (
             <AiInsightsCard
               insightsData={insightsData}

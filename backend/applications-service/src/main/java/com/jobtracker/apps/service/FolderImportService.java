@@ -40,25 +40,26 @@ public class FolderImportService {
                 (dir, name) -> name.toLowerCase().endsWith(".csv"));
 
         if (csvFiles == null || csvFiles.length == 0) {
-            return new FolderImportResult(0, 0, 0, List.of());
+            return new FolderImportResult(0, 0, 0, 0, List.of());
         }
 
-        int totalImported = 0, totalFailed = 0;
+        int totalImported = 0, totalUpdated = 0, totalFailed = 0;
         List<FolderImportResult.FileImportSummary> summaries = new ArrayList<>();
 
         for (File file : csvFiles) {
             log.info("Processing CSV file: {}", file.getName());
             var result = csvImportService.importCsv(file);
             summaries.add(new FolderImportResult.FileImportSummary(
-                    file.getName(), result.imported(), result.failed(), result.errors()));
+                    file.getName(), result.imported(), result.updated(), result.failed(), result.errors()));
             totalImported += result.imported();
-            totalFailed += result.failed();
+            totalUpdated  += result.updated();
+            totalFailed   += result.failed();
             Files.move(file.toPath(), processedPath.resolve(file.getName()),
                     StandardCopyOption.REPLACE_EXISTING);
-            log.info("Moved {} to processed/ ({} imported, {} failed)",
-                    file.getName(), result.imported(), result.failed());
+            log.info("Moved {} to processed/ ({} imported, {} updated, {} failed)",
+                    file.getName(), result.imported(), result.updated(), result.failed());
         }
 
-        return new FolderImportResult(csvFiles.length, totalImported, totalFailed, summaries);
+        return new FolderImportResult(csvFiles.length, totalImported, totalUpdated, totalFailed, summaries);
     }
 }

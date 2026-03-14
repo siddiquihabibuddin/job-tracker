@@ -27,7 +27,7 @@ public class ApplicationService {
 
     private static final UUID DEMO_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-    private UUID currentUserId() {
+    public UUID currentUserId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
             String sub = jwt.getSubject();

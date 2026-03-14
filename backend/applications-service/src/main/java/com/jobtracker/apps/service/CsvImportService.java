@@ -2,7 +2,9 @@ package com.jobtracker.apps.service;
 
 import com.jobtracker.apps.api.dto.CreateApplicationRequest;
 import com.jobtracker.apps.api.dto.CsvImportResult;
+import com.jobtracker.apps.api.dto.UpdateApplicationRequest;
 import com.jobtracker.apps.domain.model.AppStatus;
+import com.jobtracker.apps.domain.repo.ApplicationRepository;
 import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvException;
 import org.springframework.stereotype.Service;
@@ -20,6 +22,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class CsvImportService {
@@ -52,9 +55,11 @@ public class CsvImportService {
     );
 
     private final ApplicationService applicationService;
+    private final ApplicationRepository appRepo;
 
-    public CsvImportService(ApplicationService applicationService) {
+    public CsvImportService(ApplicationService applicationService, ApplicationRepository appRepo) {
         this.applicationService = applicationService;
+        this.appRepo = appRepo;
     }
 
     public CsvImportResult importCsv(MultipartFile file) throws IOException {
@@ -75,10 +80,13 @@ public class CsvImportService {
             throw new IOException("Failed to parse CSV: " + e.getMessage(), e);
         }
 
-        if (rows.isEmpty()) return new CsvImportResult(0, 0, List.of());
+        if (rows.isEmpty()) return new CsvImportResult(0, 0, 0, List.of());
+
+        // Resolve userId once — consistent across the entire import batch
+        UUID userId = applicationService.currentUserId();
 
         // Skip header row (index 0); process from row 1 onwards
-        int imported = 0, failed = 0;
+        int imported = 0, updated = 0, failed = 0;
         List<String> errors = new ArrayList<>();
 
         for (int i = 1; i < rows.size(); i++) {
@@ -119,6 +127,8 @@ public class CsvImportService {
                 LocalDate appliedAt  = parseDate(applyDateStr);
                 LocalDate rejectDate = parseDate(rejectDateStr);
 
+                String resumeValue = resumeUploaded.isBlank() ? null : resumeUploaded;
+
                 var req = new CreateApplicationRequest(
                         company,
                         role,
@@ -133,11 +143,24 @@ public class CsvImportService {
                         null,                                           // notes
                         appliedAt,
                         jobLink.isBlank() ? null : jobLink,
-                        resumeUploaded.isBlank() ? null : resumeUploaded,
+                        resumeValue,
                         gotCall,
                         rejectDate,
                         loginDetails.isBlank() ? null : loginDetails
                 );
+
+                // Upsert: only attempt dupe check when both key fields are present
+                if (req.appliedAt() != null
+                        && req.resumeUploaded() != null && !req.resumeUploaded().isBlank()) {
+                    var existing = appRepo
+                            .findByUser_IdAndCompanyIgnoreCaseAndRoleIgnoreCaseAndAppliedAtAndResumeUploadedAndDeletedAtIsNull(
+                                    userId, req.company(), req.role(), req.appliedAt(), req.resumeUploaded());
+                    if (existing.isPresent()) {
+                        applicationService.update(existing.get().getId(), toUpdateRequest(req));
+                        updated++;
+                        continue;
+                    }
+                }
 
                 applicationService.create(req);
                 imported++;
@@ -147,10 +170,30 @@ public class CsvImportService {
             }
         }
 
-        return new CsvImportResult(imported, failed, errors);
+        return new CsvImportResult(imported, updated, failed, errors);
     }
 
     // --- helpers ---
+
+    private UpdateApplicationRequest toUpdateRequest(CreateApplicationRequest req) {
+        return new UpdateApplicationRequest(
+                req.company(),
+                req.role(),
+                req.status(),
+                req.source(),
+                req.location(),
+                req.salaryMin(),
+                req.salaryMax(),
+                req.currency(),
+                req.nextFollowUpOn(),
+                req.tags(),
+                req.appliedAt(),
+                req.jobLink(),
+                req.resumeUploaded(),
+                req.gotCall(),
+                req.rejectDate(),
+                req.loginDetails());
+    }
 
     private boolean isBlankRow(String[] cols) {
         for (String c : cols) {

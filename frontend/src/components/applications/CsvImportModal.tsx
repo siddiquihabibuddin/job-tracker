@@ -42,6 +42,7 @@ export default function CsvImportModal({
           <div>
             <p>
               <strong style={{ color: '#22c55e' }}>✓ {importResult.imported} imported</strong>
+              {importResult.updated > 0 && <span style={{ color: '#f59e0b', marginLeft: '1rem' }}>↻ {importResult.updated} updated</span>}
               {importResult.failed > 0 && <span style={{ color: '#ef4444', marginLeft: '1rem' }}>✗ {importResult.failed} failed</span>}
             </p>
             {importResult.errors.length > 0 && (

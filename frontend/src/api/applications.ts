@@ -33,6 +33,7 @@ export interface ListResponse {
 
 export interface CsvImportResult {
   imported: number
+  updated: number
   failed: number
   errors: string[]
 }
@@ -40,6 +41,7 @@ export interface CsvImportResult {
 export interface FileImportSummary {
   fileName: string
   imported: number
+  updated: number
   failed: number
   errors: string[]
 }
@@ -47,6 +49,7 @@ export interface FileImportSummary {
 export interface FolderImportResult {
   totalFiles: number
   totalImported: number
+  totalUpdated: number
   totalFailed: number
   files: FileImportSummary[]
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { StaleApp } from '../../api/stats'
+import { formatDate } from '../../utils/formatDate'
 
 const GHOST_PAGE_SIZE = 8
 
@@ -29,7 +30,7 @@ export default function GhostingTracker({ staleApps }: GhostingTrackerProps) {
               {app.company} — {app.role}
             </Link>
             <small style={{ color: 'var(--pico-muted-color)', fontSize: '0.72rem', whiteSpace: 'nowrap', marginLeft: '0.75rem' }}>
-              {app.status} · {app.appliedAt ?? '—'} · {app.daysSinceLastEvent}d ago
+              {app.status} · {app.appliedAt ? formatDate(app.appliedAt) : '—'} · {app.daysSinceLastEvent}d ago
             </small>
           </li>
         ))}

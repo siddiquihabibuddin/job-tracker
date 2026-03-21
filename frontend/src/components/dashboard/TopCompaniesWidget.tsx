@@ -1,10 +1,5 @@
 import type { CompanyCount } from '../../api/stats'
-
-function formatDate(dateStr: string): string {
-  const [year, month, day] = dateStr.split('-').map(Number)
-  const monthName = new Date(year, month - 1).toLocaleString('en-US', { month: 'short' })
-  return `${monthName}/${day}/${year}`
-}
+import { formatDate } from '../../utils/formatDate'
 
 interface TopCompaniesWidgetProps {
   companies: CompanyCount[] | undefined

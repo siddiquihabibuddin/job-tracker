@@ -1,5 +1,11 @@
 import type { CompanyCount } from '../../api/stats'
 
+function formatDate(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const monthName = new Date(year, month - 1).toLocaleString('en-US', { month: 'short' })
+  return `${monthName}/${day}/${year}`
+}
+
 interface TopCompaniesWidgetProps {
   companies: CompanyCount[] | undefined
 }
@@ -24,12 +30,19 @@ export default function TopCompaniesWidget({ companies }: TopCompaniesWidgetProp
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
-              <span style={{ fontSize: '0.78rem', fontWeight: 500 }}>
-                <span style={{ color: 'var(--pico-muted-color)', marginRight: '0.4rem', fontSize: '0.72rem' }}>
-                  #{index + 1}
+              <div>
+                <span style={{ fontSize: '0.78rem', fontWeight: 500 }}>
+                  <span style={{ color: 'var(--pico-muted-color)', marginRight: '0.4rem', fontSize: '0.72rem' }}>
+                    #{index + 1}
+                  </span>
+                  {item.company}
                 </span>
-                {item.company}
-              </span>
+                {item.lastAppliedAt && (
+                  <div style={{ fontSize: '0.68rem', color: 'var(--pico-muted-color)', marginTop: '0.1rem', paddingLeft: '1.2rem' }}>
+                    Last applied: {formatDate(item.lastAppliedAt)}
+                  </div>
+                )}
+              </div>
               <span
                 style={{
                   fontSize: '0.72rem',
@@ -40,6 +53,7 @@ export default function TopCompaniesWidget({ companies }: TopCompaniesWidgetProp
                   padding: '0 0.35rem',
                   minWidth: '1.5rem',
                   textAlign: 'center',
+                  alignSelf: 'flex-start',
                 }}
               >
                 {item.count}

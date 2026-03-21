@@ -1,3 +1,3 @@
 package com.jobtracker.stats.api.dto;
 
-public record CompanyCountDto(String company, long count) {}
+public record CompanyCountDto(String company, long count, String lastAppliedAt) {}

@@ -121,6 +121,7 @@ export async function getStaleApps(): Promise<StaleApp[]> {
 export interface CompanyCount {
   company: string
   count: number
+  lastAppliedAt?: string
 }
 
 export async function getTopCompanies(): Promise<CompanyCount[]> {

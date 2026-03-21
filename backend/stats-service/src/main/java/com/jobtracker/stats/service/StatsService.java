@@ -237,10 +237,11 @@ public class StatsService {
         queriesCounter.increment();
         List<CompanyCountDto> result = new ArrayList<>();
         jdbc.query(
-            "SELECT company, COUNT(*) AS cnt FROM applications_snapshot " +
+            "SELECT company, COUNT(*) AS cnt, MAX(COALESCE(applied_at, created_at::date))::text AS last_applied " +
+            "FROM applications_snapshot " +
             "WHERE user_id = ? AND deleted_at IS NULL AND company IS NOT NULL " +
             "GROUP BY company ORDER BY cnt DESC, company ASC LIMIT 10",
-            (RowCallbackHandler) rs -> result.add(new CompanyCountDto(rs.getString(1), rs.getLong(2))),
+            (RowCallbackHandler) rs -> result.add(new CompanyCountDto(rs.getString(1), rs.getLong(2), rs.getString(3))),
             userId);
         return result;
     }

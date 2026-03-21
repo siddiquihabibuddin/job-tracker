@@ -105,7 +105,7 @@ public class ApplicationEventListener {
 
     private void evictStatsCache(UUID userId) {
         String prefix = userId.toString() + ":";
-        for (String cacheName : new String[]{"stats-summary", "stats-trend", "stats-breakdown", "stats-roles"}) {
+        for (String cacheName : new String[]{"stats-summary", "stats-trend", "stats-breakdown", "stats-roles", "stats-companies"}) {
             var keys = redis.keys(cacheName + "::" + prefix + "*");
             if (keys != null && !keys.isEmpty()) {
                 redis.delete(keys);

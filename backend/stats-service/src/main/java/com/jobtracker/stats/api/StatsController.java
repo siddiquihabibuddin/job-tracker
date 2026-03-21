@@ -2,6 +2,7 @@ package com.jobtracker.stats.api;
 
 import com.jobtracker.stats.api.dto.ActivityItemDto;
 import com.jobtracker.stats.api.dto.BreakdownResponseDto;
+import com.jobtracker.stats.api.dto.CompanyCountDto;
 import com.jobtracker.stats.api.dto.StaleAppDto;
 import com.jobtracker.stats.api.dto.InsightsDto;
 import com.jobtracker.stats.api.dto.RoleCountsResponseDto;
@@ -76,6 +77,11 @@ public class StatsController {
     @GetMapping("/activity/{appId}")
     public List<ActivityItemDto> activityFeed(@PathVariable UUID appId) {
         return svc.getActivityFeed(currentUserId(), appId);
+    }
+
+    @GetMapping("/companies")
+    public List<CompanyCountDto> topCompanies() {
+        return svc.getTopCompanies(currentUserId());
     }
 
     @GetMapping("/stale")

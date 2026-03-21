@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getBreakdown, getInsights, getRoleCounts, getStaleApps, getTrend, type BreakdownResponse, type RoleCountsResponse, type StaleApp, type TrendPoint } from '../api/stats'
+import { getBreakdown, getInsights, getRoleCounts, getStaleApps, getTopCompanies, getTrend, type BreakdownResponse, type CompanyCount, type RoleCountsResponse, type StaleApp, type TrendPoint } from '../api/stats'
 import DashboardHeader from '../components/dashboard/DashboardHeader'
 import OpenWindowsCards from '../components/dashboard/OpenWindowsCards'
 import AppliedVsRejectedChart from '../components/dashboard/AppliedVsRejectedChart'
@@ -10,6 +10,7 @@ import RoleKpiCards from '../components/dashboard/RoleKpiCards'
 import AiInsightsCard from '../components/dashboard/AiInsightsCard'
 import GhostingTracker from '../components/dashboard/GhostingTracker'
 import { AlertsWidget } from '../components/dashboard/AlertsWidget'
+import TopCompaniesWidget from '../components/dashboard/TopCompaniesWidget'
 
 const USE_MOCK = (import.meta.env.VITE_USE_MOCK ?? 'true') === 'true'
 const CURRENT_YEAR = new Date().getFullYear()
@@ -72,6 +73,13 @@ export default function Dashboard() {
     queryFn: () => getTrend('week', 12),
     enabled: !USE_MOCK,
     staleTime: 5 * 60 * 1000,
+  })
+
+  const { data: topCompanies } = useQuery<CompanyCount[]>({
+    queryKey: ['top-companies'],
+    queryFn: getTopCompanies,
+    staleTime: 60_000,
+    enabled: !USE_MOCK,
   })
 
   const windows = data?.openWindows
@@ -140,6 +148,9 @@ export default function Dashboard() {
               insightsFetching={insightsFetching}
               refetchInsights={refetchInsights}
             />
+          )}
+          {!USE_MOCK && (
+            <TopCompaniesWidget companies={topCompanies} />
           )}
           {!USE_MOCK && (
             <GhostingTracker staleApps={staleApps} />

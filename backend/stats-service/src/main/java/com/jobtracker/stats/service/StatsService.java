@@ -2,6 +2,7 @@ package com.jobtracker.stats.service;
 
 import com.jobtracker.stats.api.dto.ActivityItemDto;
 import com.jobtracker.stats.api.dto.BreakdownResponseDto;
+import com.jobtracker.stats.api.dto.CompanyCountDto;
 import com.jobtracker.stats.api.dto.StaleAppDto;
 import com.jobtracker.stats.api.dto.BreakdownRowDto;
 import com.jobtracker.stats.api.dto.OpenWindowsDto;
@@ -228,6 +229,20 @@ public class StatsService {
             }
             return new RoleCountsResponseDto("year", null, rows);
         }
+    }
+
+    @Cacheable(cacheNames = CacheConfig.CACHE_COMPANIES, key = "#userId")
+    public List<CompanyCountDto> getTopCompanies(UUID userId) {
+        log.info("Serving top-companies query userId={}", userId);
+        queriesCounter.increment();
+        List<CompanyCountDto> result = new ArrayList<>();
+        jdbc.query(
+            "SELECT company, COUNT(*) AS cnt FROM applications_snapshot " +
+            "WHERE user_id = ? AND deleted_at IS NULL AND company IS NOT NULL " +
+            "GROUP BY company ORDER BY cnt DESC, company ASC LIMIT 10",
+            (RowCallbackHandler) rs -> result.add(new CompanyCountDto(rs.getString(1), rs.getLong(2))),
+            userId);
+        return result;
     }
 
     public List<StaleAppDto> getStaleApplications(UUID userId) {

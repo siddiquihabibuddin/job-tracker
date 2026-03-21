@@ -117,3 +117,13 @@ export async function getStaleApps(): Promise<StaleApp[]> {
   const res = await httpStats.get<StaleApp[]>('/stats/stale')
   return res.data
 }
+
+export interface CompanyCount {
+  company: string
+  count: number
+}
+
+export async function getTopCompanies(): Promise<CompanyCount[]> {
+  const { data } = await httpStats.get<CompanyCount[]>('/stats/companies')
+  return data
+}

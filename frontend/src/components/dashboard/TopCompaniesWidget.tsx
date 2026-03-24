@@ -4,6 +4,13 @@ import { daysAgo } from '../../utils/formatDate'
 
 const PAGE_SIZE = 10
 
+function lastAppliedColor(days: number): string {
+  if (days <= 30) return '#e53935'   // red   — super recent
+  if (days <= 90) return '#fb8c00'   // orange
+  if (days <= 180) return '#fdd835'  // yellow
+  return '#43a047'                   // green  — over 6 months
+}
+
 interface TopCompaniesWidgetProps {
   companies: CompanyCount[] | undefined
 }
@@ -43,11 +50,14 @@ export default function TopCompaniesWidget({ companies }: TopCompaniesWidgetProp
                   </span>
                   {item.company}
                 </span>
-                {item.lastAppliedAt && (
-                  <div style={{ fontSize: '0.68rem', color: 'var(--pico-muted-color)', marginTop: '0.1rem', paddingLeft: '1.2rem' }}>
-                    Last Applied · {daysAgo(item.lastAppliedAt)} days ago
-                  </div>
-                )}
+                {item.lastAppliedAt && (() => {
+                  const days = daysAgo(item.lastAppliedAt)
+                  return (
+                    <div style={{ fontSize: '0.68rem', color: lastAppliedColor(days), marginTop: '0.1rem', paddingLeft: '1.2rem' }}>
+                      Last Applied · {days} days ago
+                    </div>
+                  )
+                })()}
               </div>
               <span
                 style={{

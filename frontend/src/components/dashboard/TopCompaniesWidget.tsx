@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import type { CompanyCount } from '../../api/stats'
-import { formatDate } from '../../utils/formatDate'
+import { daysAgo } from '../../utils/formatDate'
 
 const PAGE_SIZE = 10
 
@@ -45,7 +45,7 @@ export default function TopCompaniesWidget({ companies }: TopCompaniesWidgetProp
                 </span>
                 {item.lastAppliedAt && (
                   <div style={{ fontSize: '0.68rem', color: 'var(--pico-muted-color)', marginTop: '0.1rem', paddingLeft: '1.2rem' }}>
-                    Last applied: {formatDate(item.lastAppliedAt)}
+                    Last Applied · {daysAgo(item.lastAppliedAt)} days ago
                   </div>
                 )}
               </div>

@@ -290,17 +290,19 @@ public class StatsService {
         String snapSql =
             "SELECT " +
             "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) = " + clientToday + " AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS today, " +
+            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) = " + clientToday + " - 1 AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS yesterday, " +
             "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= " + clientToday + " - 7   AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last7d, " +
             "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= " + clientToday + " - 15  AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last15d, " +
             "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= " + clientToday + " - 30  AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last30d " +
             "FROM applications_snapshot WHERE user_id=? AND deleted_at IS NULL";
 
-        long[] snapResult = {0, 0, 0, 0};
+        long[] snapResult = {0, 0, 0, 0, 0};
         jdbc.query(snapSql, (RowCallbackHandler) rs -> {
             snapResult[0] = rs.getLong(1);
             snapResult[1] = rs.getLong(2);
             snapResult[2] = rs.getLong(3);
             snapResult[3] = rs.getLong(4);
+            snapResult[4] = rs.getLong(5);
         }, userId);
 
         LocalDate today = LocalDate.now();
@@ -330,7 +332,7 @@ public class StatsService {
                 },
                 userId, minYear, minYear, minMonth);
 
-        return new OpenWindowsDto(snapResult[0], snapResult[1], snapResult[2], snapResult[3],
+        return new OpenWindowsDto(snapResult[0], snapResult[1], snapResult[2], snapResult[3], snapResult[4],
                                   aggResult[0], aggResult[1], aggResult[2], aggResult[3]);
     }
 }

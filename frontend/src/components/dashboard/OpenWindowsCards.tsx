@@ -7,8 +7,9 @@ interface OpenWindowsCardsProps {
 
 export default function OpenWindowsCards({ windows, loading }: OpenWindowsCardsProps) {
   const cards = [
-    { label: 'Today',    value: windows?.today   ?? 0 },
-    { label: 'Last 7d',  value: windows?.last7d  ?? 0 },
+    { label: 'Today',     value: windows?.today     ?? 0 },
+    { label: 'Yesterday', value: windows?.yesterday ?? 0 },
+    { label: 'Last 7d',  value: windows?.last7d    ?? 0 },
     { label: 'Last 15d', value: windows?.last15d ?? 0 },
     { label: 'Last 30d', value: windows?.last30d ?? 0 },
     { label: 'Last 3mo', value: windows?.last3m  ?? 0 },

@@ -231,7 +231,7 @@ public class StatsService {
         }
     }
 
-    @Cacheable(cacheNames = CacheConfig.CACHE_COMPANIES, key = "#userId")
+    @Cacheable(cacheNames = CacheConfig.CACHE_COMPANIES, key = "#userId + ':'")
     public List<CompanyCountDto> getTopCompanies(UUID userId) {
         log.info("Serving top-companies query userId={}", userId);
         queriesCounter.increment();

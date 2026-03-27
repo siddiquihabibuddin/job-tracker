@@ -130,7 +130,7 @@ public class ApplicationService {
         var a = new Application();
         a.setId(UUID.randomUUID());
         a.setUser(user);
-        a.setCompany(req.company());
+        a.setCompany(normalizeText(req.company()));
         a.setRole(req.role());
         a.setStatus(req.status() != null ? req.status() : AppStatus.APPLIED);
         a.setSource(req.source());
@@ -180,7 +180,7 @@ public class ApplicationService {
 
         var prevStatus = a.getStatus();
 
-        if (req.company() != null) a.setCompany(req.company());
+        if (req.company() != null) a.setCompany(normalizeText(req.company()));
         if (req.role() != null) a.setRole(req.role());
         if (req.status() != null) a.setStatus(req.status());
         if (req.source() != null) a.setSource(req.source());
@@ -291,6 +291,10 @@ public class ApplicationService {
         note.setBody(req.getContent());
         noteRepo.save(note);
         return mapper.toDto(note);
+    }
+
+    private static String normalizeText(String s) {
+        return s == null ? null : s.replaceAll("\\s+", " ").trim();
     }
 
     private OutboxEvent toOutboxEvent(ApplicationEvent event) {

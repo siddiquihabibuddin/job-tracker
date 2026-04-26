@@ -1,0 +1,39 @@
+server:
+  port: 8085
+
+spring:
+  ai:
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      chat:
+        options:
+          model: ${OLLAMA_MODEL:qwen2.5:1.5b}
+          temperature: 0.3
+
+stats:
+  base-url: ${STATS_BASE_URL:http://localhost:8080}
+
+security:
+  jwt:
+    secret: ${JWT_SECRET:change-me-in-production-must-be-at-least-32-characters-long}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: http://zipkin:9411/api/v2/spans
+
+logging:
+  level:
+    com.jobtracker: INFO
+    org.springframework.security: WARN

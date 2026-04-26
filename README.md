@@ -31,6 +31,7 @@ A full-stack job application tracking platform built with a microservices archit
 ![Java](https://img.shields.io/badge/Java-21-orange?style=flat-square&logo=openjdk)
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.5.6-6DB33F?style=flat-square&logo=springboot)
 ![Spring Cloud](https://img.shields.io/badge/Spring_Cloud-2025.0.0-6DB33F?style=flat-square&logo=spring)
+![Spring AI](https://img.shields.io/badge/Spring_AI-1.0.0-6DB33F?style=flat-square&logo=spring)
 ![Apache Kafka](https://img.shields.io/badge/Apache_Kafka-3.7.0-231F20?style=flat-square&logo=apachekafka)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=flat-square&logo=postgresql)
 ![Flyway](https://img.shields.io/badge/Flyway-migrations-CC0200?style=flat-square&logo=flyway)
@@ -72,7 +73,7 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
                          │  └▶│  Applications Svc   │  │    Stats Service      │  │
                          │    │     :8081           │  │       :8082           │  │
                          │    │  Spring Boot + JPA  │  │  Spring Boot + JDBC  │  │
-                         │    │  JWT Auth + Flyway  │  │  JWT Auth + Ollama   │  │
+                         │    │  JWT Auth + Flyway  │  │  JWT Auth + Redis    │  │
                          │    │  CSV / Folder Import│  │  tz-aware KPI cards  │  │
                          │    └──────────┬──────────┘  └──────┬──────▲────────┘  │
                          │               │                     │      │            │
@@ -105,10 +106,16 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
                          │    └───────────────────────┘                           │
                          │                                                         │
                          │    ┌───────────────────────┐  ┌─────────────────────┐  │
-                         │    │   Ollama  :11434      │  │   Config Server     │  │
-                         │    │  qwen2.5:1.5b         │  │      :8888          │  │
-                         │    │  AI Insights (stats)  │  │  Spring Cloud Config│  │
-                         │    └───────────────────────┘  └─────────────────────┘  │
+                         │    │   AI Service  :8085   │  │   Config Server     │  │
+                         │    │  Spring AI ChatClient │  │      :8888          │  │
+                         │    │  POST /v1/ai/insights │  │  Spring Cloud Config│  │
+                         │    └──────────┬────────────┘  └─────────────────────┘  │
+                         │               │                                         │
+                         │    ┌──────────▼────────────┐                            │
+                         │    │   Ollama  :11434      │                            │
+                         │    │  qwen2.5:1.5b         │                            │
+                         │    │  local LLM, no API key│                            │
+                         │    └───────────────────────┘                            │
                          │                                                         │
                          │    ┌─────────────────────┐  ┌──────────────────────┐  │
                          │    │  Prometheus  :9090   │◀─┤   Grafana  :3001     │  │
@@ -116,7 +123,7 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
                          │    │  prometheus (15s)    │  │  JVM · HTTP · Kafka  │  │
                          │    └──────────▲───────────┘  └──────────────────────┘  │
                          │               │ metrics                                 │
-                         │    applications-service · stats-service · stats-listener│
+                         │    apps · stats · stats-listener · ai-service           │
                          │                                                         │
                          │    Zipkin :9411  (distributed tracing, 100% sampling)  │
                          └─────────────────────────────────────────────────────────┘
@@ -130,6 +137,7 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
 | **applications-service** | 8081 | Write service — REST CRUD, JPA + Hibernate, publishes Kafka events |
 | **stats-service** | 8082 | Read service — analytics from pre-computed agg tables, Redis-cached; serves activity feed |
 | **stats-listener** | 8083 | Kafka consumer — two groups: `stats-service` (snapshot/agg) + `activity-service` (activity feed) |
+| **ai-service** | 8085 | LLM-backed insights service — Spring AI `ChatClient` against Ollama; pulls per-user analytics from stats-service via HTTP and forwards the JWT |
 | **config-server** | 8888 | Centralized config for all services (Spring Cloud Config) |
 | **PostgreSQL** | 5432 | Two databases: `jt_apps` (write) and `jt_stats` (read) |
 | **Kafka** | 9092 | KRaft mode, topic: `application-events`, two consumer groups |
@@ -163,7 +171,7 @@ This is the **Transactional Outbox Pattern** — Kafka being down never causes d
 - **Bulk delete** — Select any number of applications via per-row checkboxes or the select-all header checkbox, then delete them all in one click; deletions are fired in parallel and the list updates immediately
 - **Advanced filtering** — Filter applications by status, search (company/role), month, year, and call received; sort by apply date or date added; page-based pagination (20 per page)
 - **Activity Feed** — Each Application Detail page shows a live activity timeline. Every create, status update, and deletion is translated into a human-readable message (e.g. "Applied for SWE at Google via LinkedIn", "Status changed to OFFER") and stored in the `activity_feed` table. Powered by Kafka fan-out: a second consumer group (`activity-service`) runs in `stats-listener` alongside the existing `stats-service` group, tracking independent offsets on the same `application-events` topic — no producer changes required. Idempotent via a unique constraint on `(app_id, event_type, occurred_at)`
-- **AI Insights** — The Dashboard includes an "AI Insights" card powered by a locally-running LLM (Ollama + `qwen2.5:1.5b`). It aggregates all your stats data (30-day summary, 12-week trend, monthly breakdown, role distribution) and generates 3–5 concise, actionable coaching insights. Responses are cached in Redis for 30 minutes; a Refresh button busts the cache on demand. Fully offline — no API key required
+- **AI Insights** — The Dashboard includes an "AI Insights" card powered by a locally-running LLM (Ollama + `qwen2.5:1.5b`). A dedicated **`ai-service`** (port 8085) handles the LLM round-trip using Spring AI's `ChatClient` abstraction — it pulls per-user analytics from `stats-service` via the gateway (forwarding the caller's JWT), stuffs them into a prompt template, and asks the model for 3–5 concise, actionable coaching insights. Endpoint: `POST /v1/ai/insights`. Fully offline — no API key required
 - **Analytics Dashboard** — By Month / By Year toggle with grouped Applied vs Rejected bar chart, summary table, 7 open-window KPI cards (last 7d / 15d / 30d / 3mo / 6mo / 9mo / 1yr), and a **Top Companies** widget ranking the top 10 companies by application count with a relative fill bar for quick visual comparison
 - **Pre-computed aggregate tables** — `agg_monthly` and `agg_weekly` in `jt_stats` are maintained in-sync by stats-listener (recomputed atomically on every Kafka event); stats-service reads from these tables with indexed scans instead of live GROUP BY on the raw snapshot
 - **Redis caching** — All three stats endpoints (`/summary`, `/trend`, `/breakdown`) are cached in Redis with a 5-minute TTL, keyed per-user; the stats-listener evicts the affected user's cache keys immediately after processing each Kafka event, so the dashboard always reflects the latest data
@@ -250,6 +258,14 @@ Response: {
 
 GET /v1/stats/insights
 Response: { insights: ["...", "...", "..."], generatedAt }
+# Legacy in-process implementation served by stats-service; cached in Redis (30-min TTL)
+
+POST /v1/ai/insights
+Body:     { "windowDays": 30 }   # optional, defaults to 30
+Response: { insights: ["...", "...", "..."], generatedAt }
+# New Spring AI implementation served by ai-service. Aggregates summary, 12-week trend,
+# current-year monthly breakdown, and role distribution by calling stats-service over HTTP
+# (auth header is forwarded), then asks Ollama via ChatClient for 3-5 insights
 
 GET /v1/stats/activity/{appId}
 Response: [{ id, eventType, message, occurredAt }]
@@ -297,7 +313,7 @@ docker compose up
 ```
 
 Docker startup order is automatically enforced:
-`postgres + kafka + redis + config-server + ollama` → `applications-service + stats-service + stats-listener + ollama-init` → `api-gateway`
+`postgres + kafka + redis + config-server + ollama` → `applications-service + stats-service + stats-listener + ollama-init` → `ai-service` (waits on `ollama` healthy + `stats-service`) → `api-gateway`
 
 > **First run note:** An `ollama-init` container automatically pulls `qwen2.5:1.5b` (~1GB) on first startup. The AI Insights card shows a graceful fallback message until the download completes. The model is cached in the `ollama_data` Docker volume and is not re-downloaded on subsequent runs.
 
@@ -327,6 +343,7 @@ JobTracker/
 │   ├── applications-service/   # Write service — JPA, Kafka producer
 │   ├── stats-service/          # Read service — agg table queries, Redis-cached responses
 │   ├── stats-listener/         # Kafka consumer — snapshot upserts + agg table maintenance
+│   ├── ai-service/             # Spring AI ChatClient → Ollama, /v1/ai/insights
 │   ├── config-server/          # Spring Cloud Config Server
 │   ├── docker-compose.yml      # Full infrastructure definition
 │   ├── init-db.sql             # Creates jt_stats DB (runs on fresh volume)
@@ -380,6 +397,7 @@ backend/config-server/src/main/resources/config-repo/
 ├── applications-service.yml
 ├── stats-service.yml
 ├── stats-listener.yml
+├── ai-service.yml
 └── api-gateway.yml
 ```
 
@@ -412,6 +430,7 @@ mvn test -Dtest=ApplicationsServiceTest
 | Actuator (apps) | http://localhost:8081/actuator | — | Health, metrics, Prometheus endpoint |
 | Actuator (stats) | http://localhost:8082/actuator | — | Health, metrics, Prometheus endpoint |
 | Actuator (listener) | http://localhost:8083/actuator | — | Health, metrics, Prometheus endpoint |
+| Actuator (ai) | http://localhost:8085/actuator | — | Health, metrics, Prometheus endpoint |
 
 Custom Micrometer counters: `applications_total`, `applications_deleted_total`, `stats_queries_total`
 

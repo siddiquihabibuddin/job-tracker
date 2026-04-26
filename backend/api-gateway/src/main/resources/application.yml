@@ -5,6 +5,9 @@ spring:
     import: "optional:configserver:http://config-server:8888"
   cloud:
     gateway:
+      httpclient:
+        resolver:
+          address: 127.0.0.11
       server:
         webflux:
           globalcors:
@@ -34,6 +37,10 @@ spring:
               uri: http://job-alerts-service:8084
               predicates:
                 - Path=/v1/alerts/**
+            - id: ai-service
+              uri: http://ai-service:8085
+              predicates:
+                - Path=/v1/ai/**
 
 server:
   port: 8080

@@ -229,6 +229,32 @@ services:
         reservations:
           memory: 256m
 
+  ai-service:
+    build:
+      context: ./ai-service
+    container_name: jt_ai
+    depends_on:
+      config-server:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      stats-service:
+        condition: service_started
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+      SERVER_PORT: 8085
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: qwen2.5:1.5b
+      STATS_BASE_URL: http://api-gateway:8080
+    ports:
+      - "8085:8085"
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+
   api-gateway:
     build:
       context: ./api-gateway
@@ -241,6 +267,8 @@ services:
       stats-service:
         condition: service_started
       job-alerts-service:
+        condition: service_started
+      ai-service:
         condition: service_started
     environment:
       SERVER_PORT: 8080

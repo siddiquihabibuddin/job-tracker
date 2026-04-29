@@ -1,6 +1,7 @@
 package com.jobtracker.apps.domain.model;
 
 import jakarta.persistence.*;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -31,6 +32,17 @@ public class User extends Auditable {
     @Column(name = "display_name")
     private String displayName;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private UserTier tier = UserTier.FREE;
+
+    @Column(name = "tier_updated_at")
+    private Instant tierUpdatedAt;
+
     public String getDisplayName() { return displayName; }
     public void setDisplayName(String displayName) { this.displayName = displayName; }
+    public UserTier getTier() { return tier; }
+    public void setTier(UserTier tier) { this.tier = tier; }
+    public Instant getTierUpdatedAt() { return tierUpdatedAt; }
+    public void setTierUpdatedAt(Instant tierUpdatedAt) { this.tierUpdatedAt = tierUpdatedAt; }
 }

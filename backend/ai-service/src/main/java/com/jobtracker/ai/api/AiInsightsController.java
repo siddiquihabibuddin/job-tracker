@@ -2,6 +2,7 @@ package com.jobtracker.ai.api;
 
 import com.jobtracker.ai.api.dto.InsightsDto;
 import com.jobtracker.ai.api.dto.InsightsRequest;
+import com.jobtracker.ai.security.PremiumGuard;
 import com.jobtracker.ai.service.AiInsightsService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.Authentication;
@@ -27,8 +28,10 @@ public class AiInsightsController {
 
     @PostMapping("/insights")
     public InsightsDto insights(
+            Authentication auth,
             @RequestBody(required = false) InsightsRequest body,
             @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader) {
+        PremiumGuard.requirePremium(auth);
         int windowDays = (body != null && body.windowDays() != null && body.windowDays() > 0)
                 ? body.windowDays()
                 : 30;

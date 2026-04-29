@@ -10,6 +10,7 @@ import {
   type CsvImportResult,
   type FolderImportResult,
 } from '../api/applications'
+import { bulkDeleteApplications } from '../api/billing'
 import {
   fetchMockApplications as mockList,
   deleteMockApplication as mockDelete,
@@ -140,13 +141,21 @@ export default function Applications() {
     if (!confirm(`Delete ${ids.length} application${ids.length > 1 ? 's' : ''}?`)) return
     setBulkDeleting(true)
     try {
-      await Promise.all(ids.map(id => USE_MOCK ? mockDelete(id) : apiDelete(id)))
-      setRows(prev => prev.filter(r => !selected.has(r.id)))
-      setSelected(new Set())
-      setToast(`Deleted ${ids.length} application${ids.length > 1 ? 's' : ''}`)
+      if (USE_MOCK) {
+        await Promise.all(ids.map(id => mockDelete(id)))
+        setRows(prev => prev.filter(r => !selected.has(r.id)))
+        setSelected(new Set())
+        setToast(`Deleted ${ids.length} application${ids.length > 1 ? 's' : ''}`)
+      } else {
+        const result = await bulkDeleteApplications(ids)
+        // Re-fetch to get authoritative state from the server
+        setLoadKey(k => k + 1)
+        setSelected(new Set())
+        setToast(`Deleted ${result.deleted} application${result.deleted !== 1 ? 's' : ''}`)
+      }
       setTimeout(() => setToast(null), 2500)
     } catch {
-      alert('One or more deletions failed')
+      alert('Bulk delete failed')
     } finally {
       setBulkDeleting(false)
     }

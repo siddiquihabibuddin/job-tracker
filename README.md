@@ -168,14 +168,15 @@ This is the **Transactional Outbox Pattern** — Kafka being down never causes d
 
 - **User registration & login** — `POST /v1/auth/register` creates a new account (BCrypt-hashed password, immediate JWT); `POST /v1/auth/token` authenticates existing users; all credentials stored in the `users` table — no hardcoded demo users
 - **JWT Authentication** — HS256 token-based auth, enforced by Spring Security on all services; each user sees only their own data
+- **FREE / PREMIUM tiers** — Every account is `FREE` by default. The `/upgrade` page presents a mock checkout (no real charge); submitting valid card details flips the account to `PREMIUM` and re-issues a fresh JWT carrying a `tier` claim so every service gates access locally without a DB round-trip. The `saifz7@gmail.com` owner account is automatically promoted to `PREMIUM` on registration. Server-side enforcement (`PremiumGuard.requirePremium()`) in `applications-service` and `ai-service` returns HTTP 402 with `{ "error": "premium_required", "upgradeUrl": "/upgrade" }` for free users hitting premium endpoints; the frontend 402 interceptor redirects to `/upgrade`
 - **Full CRUD** — Create, read, update, and soft-delete job applications with rich fields: apply date, salary range, job link, call received, reject date, resume, login details, notes
-- **CSV Import** — Bulk import applications from a spreadsheet export; handles quoted commas, multiple date formats, salary parsing (`$50K`, `50,000–80,000`), and flexible status mapping (`Open` → APPLIED, `Closed` → REJECTED, Open + Call → PHONE). Re-importing the same file is safe: rows with a matching `(company, role, applied_at, resume_uploaded)` key are updated instead of duplicated; rows missing `applied_at` or `resume_uploaded` are always inserted. The response includes an `updated` count alongside `imported` and `failed`
-- **Folder-based Bulk Import** — Drop CSV files into a configured host folder (`HOST_CSV_FOLDER` in `.env`, mounted into the container at `/app/csv-imports`) and click "Bulk Import" in the UI. Each file is processed individually and moved to a `processed/` subfolder after import. The results modal shows per-file imported/updated/failed counts with expandable row-level errors. Same deduplication logic applies per file
-- **Bulk delete** — Select any number of applications via per-row checkboxes or the select-all header checkbox, then delete them all in one click; deletions are fired in parallel and the list updates immediately
+- **CSV Import** *(Premium)* — Bulk import applications from a spreadsheet export; handles quoted commas, multiple date formats, salary parsing (`$50K`, `50,000–80,000`), and flexible status mapping (`Open` → APPLIED, `Closed` → REJECTED, Open + Call → PHONE). Re-importing the same file is safe: rows with a matching `(company, role, applied_at, resume_uploaded)` key are updated instead of duplicated; rows missing `applied_at` or `resume_uploaded` are always inserted. The response includes an `updated` count alongside `imported` and `failed`
+- **Folder-based Bulk Import** *(Premium)* — Drop CSV files into a configured host folder (`HOST_CSV_FOLDER` in `.env`, mounted into the container at `/app/csv-imports`) and click "Bulk Import" in the UI. Each file is processed individually and moved to a `processed/` subfolder after import. The results modal shows per-file imported/updated/failed counts with expandable row-level errors. Same deduplication logic applies per file
+- **Bulk delete** *(Premium)* — Select any number of applications via per-row checkboxes or the select-all header checkbox and delete them all in one request (`POST /v1/applications/bulk-delete`); server soft-deletes each owned application, publishes a Kafka event per deletion, and returns `{ deleted, skipped }`
 - **Advanced filtering** — Filter applications by status, search (company/role), month, year, and call received; sort by apply date or date added; page-based pagination (20 per page)
 - **Activity Feed** — Each Application Detail page shows a live activity timeline. Every create, status update, and deletion is translated into a human-readable message (e.g. "Applied for SWE at Google via LinkedIn", "Status changed to OFFER") and stored in the `activity_feed` table. Powered by Kafka fan-out: a second consumer group (`activity-service`) runs in `stats-listener` alongside the existing `stats-service` group, tracking independent offsets on the same `application-events` topic — no producer changes required. Idempotent via a unique constraint on `(app_id, event_type, occurred_at)`
-- **AI Insights** — The Dashboard includes an "AI Insights" card powered by a locally-running LLM (Ollama + `qwen2.5:1.5b`). A dedicated **`ai-service`** (port 8085) handles the LLM round-trip using Spring AI's `ChatClient` abstraction — it pulls per-user analytics from `stats-service` via the gateway (forwarding the caller's JWT), stuffs them into a prompt template, and asks the model for 3–5 concise, actionable coaching insights. Endpoint: `POST /v1/ai/insights`. Fully offline — no API key required
-- **Smart Create (Natural-Language Application Entry)** — On the New Application page, a "✦ Smart create with AI" section accepts a free-text sentence like *"Today I applied to a senior engineer position at Microsoft using LinkedIn with a salary range of $100,000 to $200,000"* and extracts a structured DTO (company, role, status, source, salary range, currency, applied date, location, job link, tags, notes). The same `ai-service` handles the parsing: `POST /v1/ai/applications/parse` returns parsed fields **without persisting** so the user can review and edit the form before saving via the existing create flow. The frontend merges parsed values non-destructively (never overwrites a field the user has already typed). Built on the same Spring AI `ChatClient` + Ollama stack as AI Insights — fully offline, no API key
+- **AI Insights** *(Premium)* — The Dashboard includes an "AI Insights" card powered by a locally-running LLM (Ollama + `qwen2.5:1.5b`). A dedicated **`ai-service`** (port 8085) handles the LLM round-trip using Spring AI's `ChatClient` abstraction — it pulls per-user analytics from `stats-service` via the gateway (forwarding the caller's JWT), stuffs them into a prompt template, and asks the model for 3–5 concise, actionable coaching insights. Endpoint: `POST /v1/ai/insights`. Fully offline — no API key required
+- **Smart Create (Natural-Language Application Entry)** *(Premium)* — On the New Application page, a "✦ Smart create with AI" section accepts a free-text sentence like *"Today I applied to a senior engineer position at Microsoft using LinkedIn with a salary range of $100,000 to $200,000"* and extracts a structured DTO (company, role, status, source, salary range, currency, applied date, location, job link, tags, notes). The same `ai-service` handles the parsing: `POST /v1/ai/applications/parse` returns parsed fields **without persisting** so the user can review and edit the form before saving via the existing create flow. The frontend merges parsed values non-destructively (never overwrites a field the user has already typed). Built on the same Spring AI `ChatClient` + Ollama stack as AI Insights — fully offline, no API key
 - **Analytics Dashboard** — By Month / By Year toggle with grouped Applied vs Rejected bar chart, summary table, 7 open-window KPI cards (last 7d / 15d / 30d / 3mo / 6mo / 9mo / 1yr), and a **Top Companies** widget ranking the top 10 companies by application count with a relative fill bar for quick visual comparison
 - **Pre-computed aggregate tables** — `agg_monthly` and `agg_weekly` in `jt_stats` are maintained in-sync by stats-listener (recomputed atomically on every Kafka event); stats-service reads from these tables with indexed scans instead of live GROUP BY on the raw snapshot
 - **Redis caching** — All three stats endpoints (`/summary`, `/trend`, `/breakdown`) are cached in Redis with a 5-minute TTL, keyed per-user; the stats-listener evicts the affected user's cache keys immediately after processing each Kafka event, so the dashboard always reflects the latest data
@@ -199,14 +200,32 @@ This is the **Transactional Outbox Pattern** — Kafka being down never causes d
 ```
 POST /v1/auth/register
 Body:     { "email": "you@example.com", "password": "••••••••", "displayName": "Your Name" }
-Response: 201 { "token": "eyJ...", "email": "...", "userId": "...", "displayName": "..." }
+Response: 201 { "token": "eyJ...", "email": "...", "userId": "...", "displayName": "...", "tier": "FREE" }
 
 POST /v1/auth/token
 Body:     { "email": "you@example.com", "password": "••••••••" }
-Response: 200 { "token": "eyJ...", "email": "...", "userId": "...", "displayName": "..." }
+Response: 200 { "token": "eyJ...", "email": "...", "userId": "...", "displayName": "...", "tier": "FREE|PREMIUM" }
 ```
 
 Passwords are BCrypt-hashed (strength 10). Emails are normalised to lowercase before storage and lookup. Duplicate email registration returns `409 { "error": "Email already registered" }`. Invalid credentials return `401 { "error": "Invalid credentials" }` (same message for all failure branches to prevent user enumeration).
+
+The JWT carries a `tier` claim (`"FREE"` or `"PREMIUM"`) in addition to `sub` (userId UUID) and `email`. All four Spring Boot services read this claim locally via `NimbusJwtDecoder` — no service-to-service call needed to check tier. Tokens are valid for 24 hours; upgrading via `/v1/billing/checkout` issues a fresh token immediately so the new tier takes effect without waiting for expiry.
+
+### Billing
+
+```
+POST /v1/billing/checkout   (auth required)
+Body:     { "cardNumber": "4242 4242 4242 4242", "expMonth": 12, "expYear": 2030,
+            "cvc": "123", "nameOnCard": "Jane Smith" }
+Response: 200 { "token": "eyJ...", "email": "...", "userId": "...", "displayName": "...", "tier": "PREMIUM" }
+```
+
+Mock billing — no real charge is made and no card data is persisted. Spaces and dashes in `cardNumber` are stripped before format validation (`@Pattern(\d{13,19})`). On success the user's tier is updated to `PREMIUM` in the database and a fresh JWT is returned; the frontend stores the new token and invalidates the React Query cache so premium UI unlocks immediately.
+
+```
+GET /v1/billing/me   (auth required)
+Response: { "tier": "FREE|PREMIUM", "tierUpdatedAt": "2026-04-29T..." }
+```
 
 ### Applications
 
@@ -217,8 +236,9 @@ GET    /v1/applications/{id}
 PATCH  /v1/applications/{id}                (Idempotency-Key header required)
 DELETE /v1/applications/{id}
 
-POST   /v1/applications/import              (multipart/form-data, field: file)
-POST   /v1/applications/import-folder       (processes all .csv files in HOST_CSV_FOLDER)
+POST   /v1/applications/import              (multipart/form-data, field: file)  [Premium]
+POST   /v1/applications/import-folder       (processes all .csv files in HOST_CSV_FOLDER)  [Premium]
+POST   /v1/applications/bulk-delete         (body: { "ids": ["uuid", ...] })  [Premium]
 
 POST   /v1/applications/{id}/notes
 PATCH  /v1/applications/{appId}/notes/{noteId}
@@ -374,9 +394,11 @@ JobTracker/
 │   └── .gitignore
 └── frontend/
     ├── src/
-    │   ├── api/                # Axios clients + typed API functions
-    │   ├── auth/               # AuthContext + RequireAuth route guard
-    │   ├── routes/             # Login, Register, Dashboard, Applications, Detail, Profile
+    │   ├── api/                # Axios clients + typed API functions (applications, billing, stats)
+    │   ├── auth/               # AuthContext (with tier), RequireAuth, usePremium hook
+    │   ├── components/         # PremiumGate, UpsellCard, shared UI components
+    │   ├── routes/             # Login, Register, Dashboard, Applications, Detail, NewApplication,
+    │   │                       #   Profile, Upgrade (mock checkout)
     │   └── main.tsx            # App entry + ErrorBoundary
     ├── .env                    # Local dev environment variables
     └── package.json
@@ -388,7 +410,7 @@ JobTracker/
 
 **`jt_apps`** (write database)
 
-- `users` — registered users with BCrypt-hashed passwords and optional display name
+- `users` — registered users with BCrypt-hashed passwords, optional display name, `tier TEXT DEFAULT 'FREE'` (CHECK `IN ('FREE','PREMIUM')`), and `tier_updated_at`
 - `applications` — job applications with JSONB tags, salary range, soft-delete, and extended fields: `applied_at`, `job_link`, `resume_uploaded`, `got_call`, `reject_date`, `login_details`
 - `application_status_history` — full audit trail of status transitions
 - `application_notes` — notes per application

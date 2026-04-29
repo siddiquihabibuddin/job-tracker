@@ -10,6 +10,7 @@ import Applications from './routes/Applications'
 import ApplicationDetail from './routes/ApplicationDetail'
 import NewApplication from './routes/NewApplication'
 import Profile from './routes/Profile'
+import Upgrade from './routes/Upgrade'
 import Login from './routes/Login'
 import Register from './routes/Register'
 import ErrorPage from './routes/ErrorPage'
@@ -38,6 +39,7 @@ const router = createBrowserRouter([
           { path: 'applications/:id', element: <ApplicationDetail /> },
           { path: 'alerts', element: <Alerts /> },
           { path: 'profile', element: <Profile /> },
+          { path: 'upgrade', element: <Upgrade /> },
         ],
       },
       { path: '*', element: <ErrorPage /> },

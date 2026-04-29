@@ -1,13 +1,15 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { httpApps, registerUnauthorizedHandler } from '../api/client'
 
-type User = { id: string; email: string; name?: string }
+export type UserTier = 'FREE' | 'PREMIUM'
+export type User = { id: string; email: string; name?: string; tier: UserTier }
 type AuthContextType = {
   user: User | null
   token: string | null
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string, displayName?: string) => Promise<void>
   signOut: () => void
+  setUser: (user: User) => void
 }
 
 interface AuthApiResponse {
@@ -15,6 +17,7 @@ interface AuthApiResponse {
   email: string
   userId: string
   displayName: string | null
+  tier?: UserTier
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -47,7 +50,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   function handleAuthResponse(data: AuthApiResponse) {
     const name = data.displayName ?? data.email.split('@')[0]
-    persist({ id: data.userId, email: data.email, name }, data.token)
+    const tier: UserTier = data.tier ?? 'FREE'
+    persist({ id: data.userId, email: data.email, name, tier }, data.token)
   }
 
   const value = useMemo<AuthContextType>(() => ({
@@ -63,6 +67,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
     signOut() {
       persist(null, null)
+    },
+    setUser(u: User) {
+      setUser(u)
+      sessionStorage.setItem('jt_user', JSON.stringify(u))
     },
   }), [user, token])
 

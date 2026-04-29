@@ -29,6 +29,10 @@ spring:
               uri: http://applications-service:8081
               predicates:
                 - Path=/v1/applications/**
+            - id: billing-service
+              uri: http://applications-service:8081
+              predicates:
+                - Path=/v1/billing/**
             - id: stats-service
               uri: http://stats-service:8082
               predicates:

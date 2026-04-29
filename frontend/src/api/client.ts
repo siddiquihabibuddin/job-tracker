@@ -25,6 +25,12 @@ export function registerUnauthorizedHandler(handler: () => void) {
   onUnauthorized = handler
 }
 
+// Called by App router to wire up 402 → /upgrade navigation
+let onPaymentRequired: (() => void) | null = null
+export function registerPaymentRequiredHandler(handler: () => void) {
+  onPaymentRequired = handler
+}
+
 function attachInterceptors(instance: typeof httpApps) {
   instance.interceptors.request.use((cfg) => {
     const t = getToken()
@@ -37,6 +43,12 @@ function attachInterceptors(instance: typeof httpApps) {
     (err) => {
       if (err?.response?.status === 401 && onUnauthorized) {
         onUnauthorized()
+      }
+      if (err?.response?.status === 402) {
+        const body = err?.response?.data as { error?: string } | undefined
+        if (body?.error === 'premium_required' && onPaymentRequired) {
+          onPaymentRequired()
+        }
       }
       return Promise.reject(err)
     }

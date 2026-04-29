@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useRef, type FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { createMockApplication, type AppStatus as MockAppStatus } from '../mocks/applications'
-import { createApplication as apiCreate, type AppStatus } from '../api/applications'
+import { createApplication as apiCreate, parseApplicationDescription, type AppStatus } from '../api/applications'
+import axios from 'axios'
 
 const USE_MOCK = (import.meta.env.VITE_USE_MOCK ?? 'true') === 'true'
 
@@ -34,6 +35,67 @@ export default function NewApplication() {
   const [rejectDate, setRejectDate] = useState('')
   const [loginDetails, setLoginDetails] = useState('')
   const [notes, setNotes] = useState('')
+
+  // Smart create state
+  const [description, setDescription] = useState('')
+  const [parsing, setParsing] = useState(false)
+  const [parseError, setParseError] = useState<string | null>(null)
+  const [parseSuccessMsg, setParseSuccessMsg] = useState<string | null>(null)
+  const companyRef = useRef<HTMLInputElement>(null)
+
+  const VALID_STATUSES: AppStatus[] = ['APPLIED', 'PHONE', 'ONSITE', 'OFFER', 'REJECTED', 'ACCEPTED', 'WITHDRAWN']
+
+  async function onParse() {
+    const trimmed = description.trim()
+    if (!trimmed) return
+    setParsing(true)
+    setParseError(null)
+    setParseSuccessMsg(null)
+    try {
+      const parsed = await parseApplicationDescription(trimmed)
+      let applied = 0
+
+      if (parsed.company && !company.trim()) { setCompany(parsed.company); applied++ }
+      if (parsed.role && !role.trim()) { setRole(parsed.role); applied++ }
+      if (parsed.status && VALID_STATUSES.includes(parsed.status as AppStatus) && status === 'APPLIED') {
+        setStatus(parsed.status as AppStatus)
+        applied++
+      }
+      if (parsed.source && !source.trim()) { setSource(parsed.source); applied++ }
+      if (parsed.location && !locationField.trim()) { setLocationField(parsed.location); applied++ }
+      if (parsed.appliedAt && !appliedAt) { setAppliedAt(parsed.appliedAt); applied++ }
+      if (parsed.salaryMin != null && !salaryMin) { setSalaryMin(String(parsed.salaryMin)); applied++ }
+      if (parsed.salaryMax != null && !salaryMax) { setSalaryMax(String(parsed.salaryMax)); applied++ }
+      if (parsed.currency && !currency.trim()) { setCurrency(parsed.currency); applied++ }
+      if (parsed.jobLink && !jobLink.trim()) { setJobLink(parsed.jobLink); applied++ }
+      if (parsed.notes && !notes.trim()) { setNotes(parsed.notes); applied++ }
+      // TODO: tags — no tag input exists in the form yet; extracted tags are ignored until the form gains a tags field.
+
+      setParseSuccessMsg(
+        applied > 0
+          ? `Filled in ${applied} field${applied === 1 ? '' : 's'} below — review and save.`
+          : 'No new fields were extracted — fill the form manually.'
+      )
+
+      if (applied > 0) {
+        companyRef.current?.focus()
+      }
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        const httpStatus = err.response?.status
+        if (httpStatus === 400) {
+          const msg = (err.response?.data as { message?: string })?.message
+          setParseError(msg ?? 'Invalid description — please check your input.')
+        } else {
+          setParseError("Couldn't parse — please fill the form manually.")
+        }
+      } else {
+        setParseError("Couldn't parse — please fill the form manually.")
+      }
+    } finally {
+      setParsing(false)
+    }
+  }
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -94,12 +156,50 @@ export default function NewApplication() {
         </article>
       )}
       <form onSubmit={onSubmit}>
+        <fieldset style={{ background: 'var(--pico-card-background-color)', borderRadius: 'var(--pico-border-radius)', padding: '1.25rem', marginBottom: '1rem' }}>
+          <legend><strong>✦ Smart create with AI</strong></legend>
+          <p style={{ marginBottom: '0.75rem', color: 'var(--pico-muted-color)', fontSize: '0.875rem' }}>
+            Paste a sentence describing the application and we'll fill in the form below. Review and edit before saving.
+          </p>
+          <label>
+            <textarea
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              placeholder='Today I applied to a senior engineer position at Microsoft using LinkedIn with a salary of $150,000.'
+              rows={4}
+              style={{ resize: 'vertical' }}
+            />
+          </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+            <button
+              type="button"
+              className="contrast"
+              style={{ marginBottom: 0, flex: '0 0 auto' }}
+              disabled={!description.trim() || parsing}
+              aria-busy={parsing}
+              onClick={onParse}
+            >
+              {parsing ? 'Parsing…' : 'Parse with AI'}
+            </button>
+            {parsing && (
+              <small aria-live="polite" style={{ color: 'var(--pico-muted-color)' }}>Parsing your description…</small>
+            )}
+            {!parsing && parseError && (
+              <small role="alert" style={{ color: 'var(--pico-del-color, #ef4444)' }}>{parseError}</small>
+            )}
+            {!parsing && parseSuccessMsg && !parseError && (
+              <small aria-live="polite" style={{ color: 'var(--pico-ins-color, #22c55e)' }}>✓ {parseSuccessMsg}</small>
+            )}
+          </div>
+        </fieldset>
+
         <fieldset>
           <legend>Required Details</legend>
           <div className="grid">
             <label>
               Company
               <input
+                ref={companyRef}
                 value={company}
                 onChange={e => setCompany(e.target.value)}
                 placeholder="Acme Corp"

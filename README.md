@@ -109,7 +109,10 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
                          │    │   AI Service  :8085   │  │   Config Server     │  │
                          │    │  Spring AI ChatClient │  │      :8888          │  │
                          │    │  POST /v1/ai/insights │  │  Spring Cloud Config│  │
-                         │    └──────────┬────────────┘  └─────────────────────┘  │
+                         │    │  POST /v1/ai/         │  └─────────────────────┘  │
+                         │    │       applications/   │                            │
+                         │    │       parse  (NL→DTO) │                            │
+                         │    └──────────┬────────────┘                            │
                          │               │                                         │
                          │    ┌──────────▼────────────┐                            │
                          │    │   Ollama  :11434      │                            │
@@ -137,7 +140,7 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
 | **applications-service** | 8081 | Write service — REST CRUD, JPA + Hibernate, publishes Kafka events |
 | **stats-service** | 8082 | Read service — analytics from pre-computed agg tables, Redis-cached; serves activity feed |
 | **stats-listener** | 8083 | Kafka consumer — two groups: `stats-service` (snapshot/agg) + `activity-service` (activity feed) |
-| **ai-service** | 8085 | LLM-backed insights service — Spring AI `ChatClient` against Ollama; pulls per-user analytics from stats-service via HTTP and forwards the JWT |
+| **ai-service** | 8085 | LLM-backed AI service — Spring AI `ChatClient` against Ollama. Powers two endpoints: dashboard insights (pulls per-user analytics from stats-service, forwards the JWT) and natural-language application parsing (`POST /v1/ai/applications/parse` — extracts a structured DTO from a free-text description, no persistence) |
 | **config-server** | 8888 | Centralized config for all services (Spring Cloud Config) |
 | **PostgreSQL** | 5432 | Two databases: `jt_apps` (write) and `jt_stats` (read) |
 | **Kafka** | 9092 | KRaft mode, topic: `application-events`, two consumer groups |
@@ -172,6 +175,7 @@ This is the **Transactional Outbox Pattern** — Kafka being down never causes d
 - **Advanced filtering** — Filter applications by status, search (company/role), month, year, and call received; sort by apply date or date added; page-based pagination (20 per page)
 - **Activity Feed** — Each Application Detail page shows a live activity timeline. Every create, status update, and deletion is translated into a human-readable message (e.g. "Applied for SWE at Google via LinkedIn", "Status changed to OFFER") and stored in the `activity_feed` table. Powered by Kafka fan-out: a second consumer group (`activity-service`) runs in `stats-listener` alongside the existing `stats-service` group, tracking independent offsets on the same `application-events` topic — no producer changes required. Idempotent via a unique constraint on `(app_id, event_type, occurred_at)`
 - **AI Insights** — The Dashboard includes an "AI Insights" card powered by a locally-running LLM (Ollama + `qwen2.5:1.5b`). A dedicated **`ai-service`** (port 8085) handles the LLM round-trip using Spring AI's `ChatClient` abstraction — it pulls per-user analytics from `stats-service` via the gateway (forwarding the caller's JWT), stuffs them into a prompt template, and asks the model for 3–5 concise, actionable coaching insights. Endpoint: `POST /v1/ai/insights`. Fully offline — no API key required
+- **Smart Create (Natural-Language Application Entry)** — On the New Application page, a "✦ Smart create with AI" section accepts a free-text sentence like *"Today I applied to a senior engineer position at Microsoft using LinkedIn with a salary range of $100,000 to $200,000"* and extracts a structured DTO (company, role, status, source, salary range, currency, applied date, location, job link, tags, notes). The same `ai-service` handles the parsing: `POST /v1/ai/applications/parse` returns parsed fields **without persisting** so the user can review and edit the form before saving via the existing create flow. The frontend merges parsed values non-destructively (never overwrites a field the user has already typed). Built on the same Spring AI `ChatClient` + Ollama stack as AI Insights — fully offline, no API key
 - **Analytics Dashboard** — By Month / By Year toggle with grouped Applied vs Rejected bar chart, summary table, 7 open-window KPI cards (last 7d / 15d / 30d / 3mo / 6mo / 9mo / 1yr), and a **Top Companies** widget ranking the top 10 companies by application count with a relative fill bar for quick visual comparison
 - **Pre-computed aggregate tables** — `agg_monthly` and `agg_weekly` in `jt_stats` are maintained in-sync by stats-listener (recomputed atomically on every Kafka event); stats-service reads from these tables with indexed scans instead of live GROUP BY on the raw snapshot
 - **Redis caching** — All three stats endpoints (`/summary`, `/trend`, `/breakdown`) are cached in Redis with a 5-minute TTL, keyed per-user; the stats-listener evicts the affected user's cache keys immediately after processing each Kafka event, so the dashboard always reflects the latest data
@@ -266,6 +270,21 @@ Response: { insights: ["...", "...", "..."], generatedAt }
 # New Spring AI implementation served by ai-service. Aggregates summary, 12-week trend,
 # current-year monthly breakdown, and role distribution by calling stats-service over HTTP
 # (auth header is forwarded), then asks Ollama via ChatClient for 3-5 insights
+
+POST /v1/ai/applications/parse
+Body:     { "description": "Today I applied to a senior engineer position at Microsoft using LinkedIn with a salary range of $100,000 to $200,000" }
+Response: 200 {
+  company?: string, role?: string, status?: AppStatus,
+  source?: string, location?: string,
+  salaryMin?: number, salaryMax?: number, currency?: string,
+  appliedAt?: string, nextFollowUpOn?: string,
+  jobLink?: string, tags?: string[], notes?: string
+}
+# Returns a structured DTO extracted from a free-text description. NO persistence — the
+# frontend uses this to prefill the New Application form so the user can review/edit
+# before saving via POST /v1/applications. Fields the model cannot confidently extract
+# are simply omitted. 400 on blank/oversized input, 502 if the LLM call fails or
+# returns unparseable JSON.
 
 GET /v1/stats/activity/{appId}
 Response: [{ id, eventType, message, occurredAt }]

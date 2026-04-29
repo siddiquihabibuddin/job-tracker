@@ -145,3 +145,24 @@ export async function importFolder(): Promise<FolderImportResult> {
   const res = await httpApps.post<FolderImportResult>('/applications/import-folder')
   return res.data
 }
+
+export interface ParsedApplication {
+  company?: string
+  role?: string
+  status?: AppStatus | string
+  source?: string
+  location?: string
+  salaryMin?: number
+  salaryMax?: number
+  currency?: string
+  appliedAt?: string
+  nextFollowUpOn?: string | null
+  jobLink?: string | null
+  tags?: string[]
+  notes?: string | null
+}
+
+export async function parseApplicationDescription(description: string): Promise<ParsedApplication> {
+  const res = await httpApps.post<ParsedApplication>('/ai/applications/parse', { description })
+  return res.data
+}

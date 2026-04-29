@@ -20,6 +20,8 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -267,6 +269,45 @@ public class ApplicationService {
                 a.isGotCall())));
 
         deletedCounter.increment();
+    }
+
+    @Transactional
+    public com.jobtracker.apps.api.ApplicationsController.BulkDeleteResponse bulkDelete(List<UUID> ids) {
+        UUID userId = currentUserId();
+        int deleted = 0;
+        List<UUID> skipped = new ArrayList<>();
+
+        for (UUID id : ids) {
+            var optApp = appRepo.findById(id);
+            if (optApp.isEmpty()
+                    || !optApp.get().getUser().getId().equals(userId)
+                    || optApp.get().getDeletedAt() != null) {
+                skipped.add(id);
+                continue;
+            }
+            var a = optApp.get();
+            a.setDeletedAt(OffsetDateTime.now());
+            appRepo.save(a);
+
+            outboxRepo.save(toOutboxEvent(new ApplicationEvent(
+                    "APPLICATION_DELETED",
+                    a.getId(),
+                    userId,
+                    a.getStatus().name(),
+                    a.getSource(),
+                    a.getRole(),
+                    a.getCompany(),
+                    a.getCreatedAt(),
+                    a.getDeletedAt(),
+                    OffsetDateTime.now(),
+                    a.getAppliedAt(),
+                    a.isGotCall())));
+
+            deletedCounter.increment();
+            deleted++;
+        }
+
+        return new com.jobtracker.apps.api.ApplicationsController.BulkDeleteResponse(deleted, skipped);
     }
 
     // Notes

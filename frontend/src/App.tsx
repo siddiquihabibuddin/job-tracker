@@ -1,12 +1,18 @@
+import { useEffect } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import './index.css'
 import { useAuth } from './auth/AuthContext'
 import { useQuery } from '@tanstack/react-query'
 import { getUnseenCount } from './api/alerts'
+import { registerPaymentRequiredHandler } from './api/client'
 
 export default function App() {
   const { user, signOut } = useAuth()
   const nav = useNavigate()
+
+  useEffect(() => {
+    registerPaymentRequiredHandler(() => nav('/upgrade'))
+  }, [nav])
 
   const { data: unseenCount = 0 } = useQuery({
     queryKey: ['unseen-count'],
@@ -44,7 +50,39 @@ export default function App() {
                   </NavLink>
                 </li>
                 <li><NavLink to="/profile">Profile</NavLink></li>
-                <li><small>{user.email}</small></li>
+                <li>
+                  <small style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    {user.email}
+                    {user.tier === 'PREMIUM' ? (
+                      <span style={{
+                        background: 'var(--pico-primary)',
+                        color: '#fff',
+                        fontSize: '0.62rem',
+                        fontWeight: 700,
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                      }}>Pro</span>
+                    ) : (
+                      <NavLink
+                        to="/upgrade"
+                        style={{
+                          background: 'var(--pico-muted-border-color)',
+                          color: 'var(--pico-muted-color)',
+                          fontSize: '0.62rem',
+                          fontWeight: 700,
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase',
+                          textDecoration: 'none',
+                        }}
+                        title="Upgrade to Pro"
+                      >Free</NavLink>
+                    )}
+                  </small>
+                </li>
                 <li>
                   <button
                     onClick={() => { signOut(); nav('/login', { replace: true }) }}

@@ -1,21 +1,26 @@
 package com.jobtracker.apps.api;
 
 import com.jobtracker.apps.api.dto.*;
+import com.jobtracker.apps.security.PremiumGuard;
 import com.jobtracker.apps.service.ApplicationService;
 import com.jobtracker.apps.service.CsvImportService;
 import com.jobtracker.apps.service.FolderImportService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -32,6 +37,11 @@ public class ApplicationsController {
         this.csvImportService = csvImportService;
         this.folderImportService = folderImportService;
     }
+
+    public record BulkDeleteRequest(
+            @NotEmpty @Size(max = 200) List<UUID> ids) {}
+
+    public record BulkDeleteResponse(int deleted, List<UUID> skipped) {}
 
     // List with basic filters
     @GetMapping
@@ -95,16 +105,24 @@ public class ApplicationsController {
         svc.resyncStats();
     }
 
-    // CSV import
+    // CSV import — premium only
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public CsvImportResult importCsv(@RequestParam("file") MultipartFile file) throws IOException {
+    public CsvImportResult importCsv(Authentication auth, @RequestParam("file") MultipartFile file) throws IOException {
+        PremiumGuard.requirePremium(auth);
         return csvImportService.importCsv(file);
     }
 
-    // Folder-based bulk import
+    // Folder-based bulk import — premium only
     @PostMapping("/import-folder")
-    public FolderImportResult importFolder() throws IOException {
+    public FolderImportResult importFolder(Authentication auth) throws IOException {
+        PremiumGuard.requirePremium(auth);
         return folderImportService.importFromFolder();
     }
 
+    // Bulk soft-delete — premium only
+    @PostMapping("/bulk-delete")
+    public BulkDeleteResponse bulkDelete(Authentication auth, @Valid @RequestBody BulkDeleteRequest req) {
+        PremiumGuard.requirePremium(auth);
+        return svc.bulkDelete(req.ids());
+    }
 }

@@ -1,8 +1,11 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { appsBase, statsBase } from '../api/client'
 import { resyncStats } from '../api/applications'
+import { useAuth } from '../auth/AuthContext'
 
 export default function Profile() {
+  const { user } = useAuth()
   const [syncing, setSyncing] = useState(false)
   const [syncDone, setSyncDone] = useState(false)
 
@@ -15,9 +18,56 @@ export default function Profile() {
       .finally(() => setSyncing(false))
   }
 
+  const isPremium = user?.tier === 'PREMIUM'
+
   return (
     <>
       <h2>Profile</h2>
+
+      {/* Account section with tier badge */}
+      <article style={{ marginBottom: '1rem' }}>
+        <header style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{user?.email ?? '—'}</span>
+          {isPremium ? (
+            <span style={{
+              background: 'var(--pico-primary)',
+              color: '#fff',
+              fontSize: '0.68rem',
+              fontWeight: 700,
+              padding: '2px 8px',
+              borderRadius: '4px',
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+            }}>Pro</span>
+          ) : (
+            <span style={{
+              background: 'var(--pico-muted-border-color)',
+              color: 'var(--pico-muted-color)',
+              fontSize: '0.68rem',
+              fontWeight: 700,
+              padding: '2px 8px',
+              borderRadius: '4px',
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+            }}>Free</span>
+          )}
+        </header>
+        {isPremium ? (
+          <p style={{ margin: '0.5rem 0 0', fontSize: '0.82rem', color: 'var(--pico-muted-color)' }}>
+            <span
+              title="Coming soon"
+              style={{ color: 'var(--pico-muted-color)', cursor: 'default' }}
+            >
+              Manage subscription
+            </span>
+          </p>
+        ) : (
+          <p style={{ margin: '0.5rem 0 0', fontSize: '0.82rem' }}>
+            <Link to="/upgrade">Upgrade to Pro →</Link>
+          </p>
+        )}
+      </article>
+
       <form className="grid">
         <label>
           Timezone

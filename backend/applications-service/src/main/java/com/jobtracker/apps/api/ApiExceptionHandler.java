@@ -4,8 +4,12 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.Map;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -35,6 +39,16 @@ public class ApiExceptionHandler {
         pd.setTitle("Validation failed");
         pd.setDetail(ex.getMessage());
         return pd;
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Map<String, String>> handleResponseStatus(ResponseStatusException ex) {
+        if (ex.getStatusCode() == HttpStatus.PAYMENT_REQUIRED) {
+            return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED)
+                    .body(Map.of("error", "premium_required", "upgradeUrl", "/upgrade"));
+        }
+        return ResponseEntity.status(ex.getStatusCode())
+                .body(Map.of("error", ex.getReason() != null ? ex.getReason() : ex.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)

@@ -1,5 +1,7 @@
 import { useState, useRef, type FormEvent } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
+import PremiumGate from '../components/PremiumGate'
+import { usePremium } from '../auth/usePremium'
 import { createMockApplication, type AppStatus as MockAppStatus } from '../mocks/applications'
 import { createApplication as apiCreate, parseApplicationDescription, type AppStatus } from '../api/applications'
 import axios from 'axios'
@@ -15,6 +17,7 @@ interface LocationState {
 export default function NewApplication() {
   const nav = useNavigate()
   const location = useLocation()
+  const isPremium = usePremium()
   const prefill = (location.state as LocationState) ?? {}
 
   // Required fields
@@ -171,24 +174,34 @@ export default function NewApplication() {
             />
           </label>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
-            <button
-              type="button"
-              className="contrast"
-              style={{ marginBottom: 0, flex: '0 0 auto' }}
-              disabled={!description.trim() || parsing}
-              aria-busy={parsing}
-              onClick={onParse}
+            <PremiumGate
+              mode="hide"
+              fallback={
+                <em style={{ fontSize: '0.8rem', color: 'var(--pico-muted-color)' }}>
+                  Smart-fill from a paste is a Pro feature —{' '}
+                  <Link to="/upgrade">Upgrade</Link>
+                </em>
+              }
             >
-              {parsing ? 'Parsing…' : 'Parse with AI'}
-            </button>
-            {parsing && (
+              <button
+                type="button"
+                className="contrast"
+                style={{ marginBottom: 0, flex: '0 0 auto' }}
+                disabled={!description.trim() || parsing}
+                aria-busy={parsing}
+                onClick={onParse}
+              >
+                {parsing ? 'Parsing…' : 'Parse with AI'}
+              </button>
+            </PremiumGate>
+            {isPremium && parsing && (
               <small aria-live="polite" style={{ color: 'var(--pico-muted-color)' }}>Parsing your description…</small>
             )}
-            {!parsing && parseError && (
+            {isPremium && !parsing && parseError && (
               <small role="alert" style={{ color: 'var(--pico-del-color, #ef4444)' }}>{parseError}</small>
             )}
-            {!parsing && parseSuccessMsg && !parseError && (
-              <small aria-live="polite" style={{ color: 'var(--pico-ins-color, #22c55e)' }}>✓ {parseSuccessMsg}</small>
+            {isPremium && !parsing && parseSuccessMsg && !parseError && (
+              <small aria-live="polite" style={{ color: 'var(--pico-ins-color, #22c55e)' }}>&#x2713; {parseSuccessMsg}</small>
             )}
           </div>
         </fieldset>

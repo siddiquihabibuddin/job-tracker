@@ -9,6 +9,7 @@ import RoleBreakdownTable from '../components/dashboard/RoleBreakdownTable'
 import RoleKpiCards from '../components/dashboard/RoleKpiCards'
 import AiInsightsCard from '../components/dashboard/AiInsightsCard'
 import GhostingTracker from '../components/dashboard/GhostingTracker'
+import PremiumGate from '../components/PremiumGate'
 import { AlertsWidget } from '../components/dashboard/AlertsWidget'
 import TopCompaniesWidget from '../components/dashboard/TopCompaniesWidget'
 
@@ -141,13 +142,15 @@ export default function Dashboard() {
             <AlertsWidget />
           )}
           {!USE_MOCK && (
-            <AiInsightsCard
-              insightsData={insightsData}
-              insightsLoading={insightsLoading}
-              insightsError={insightsError}
-              insightsFetching={insightsFetching}
-              refetchInsights={refetchInsights}
-            />
+            <PremiumGate mode="upsell">
+              <AiInsightsCard
+                insightsData={insightsData}
+                insightsLoading={insightsLoading}
+                insightsError={insightsError}
+                insightsFetching={insightsFetching}
+                refetchInsights={refetchInsights}
+              />
+            </PremiumGate>
           )}
           {!USE_MOCK && (
             <TopCompaniesWidget companies={topCompanies} />

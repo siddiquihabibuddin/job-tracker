@@ -62,11 +62,6 @@ public class BillingController {
                             "details", "expYear: must be between " + currentYear + " and " + (currentYear + 20)));
         }
 
-        if (!luhnCheck(req.cardNumber())) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", "Validation failed", "details", "cardNumber: invalid card number"));
-        }
-
         UUID userId = currentUserId();
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
@@ -109,23 +104,4 @@ public class BillingController {
         throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Not authenticated");
     }
 
-    /**
-     * Luhn algorithm check. Returns {@code true} if the card number passes Luhn validation.
-     */
-    private static boolean luhnCheck(String number) {
-        int sum = 0;
-        boolean alternate = false;
-        for (int i = number.length() - 1; i >= 0; i--) {
-            char c = number.charAt(i);
-            if (c < '0' || c > '9') return false;
-            int n = c - '0';
-            if (alternate) {
-                n *= 2;
-                if (n > 9) n -= 9;
-            }
-            sum += n;
-            alternate = !alternate;
-        }
-        return sum % 10 == 0;
-    }
 }

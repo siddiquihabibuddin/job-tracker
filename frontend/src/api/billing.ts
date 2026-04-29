@@ -23,8 +23,27 @@ export interface BillingMeResponse {
 }
 
 export async function checkout(cardData: CheckoutRequest): Promise<CheckoutResponse> {
-  const res = await httpApps.post<CheckoutResponse>('/billing/checkout', cardData)
-  return res.data
+  try {
+    const res = await httpApps.post<CheckoutResponse>('/billing/checkout', cardData)
+    return res.data
+  } catch (err: unknown) {
+    // Extract the backend's validation message so the UI can show something useful.
+    const axiosErr = err as { response?: { data?: Record<string, unknown> } }
+    const body = axiosErr?.response?.data
+    if (body) {
+      // Map-based error: { error, details? }
+      if (typeof body['error'] === 'string') {
+        const detail = body['details'] ? ` — ${JSON.stringify(body['details'])}` : ''
+        throw new Error(`${body['error']}${detail}`)
+      }
+      // ProblemDetail error: { title, detail? }
+      if (typeof body['title'] === 'string') {
+        const detail = typeof body['detail'] === 'string' ? `: ${body['detail']}` : ''
+        throw new Error(`${body['title']}${detail}`)
+      }
+    }
+    throw err
+  }
 }
 
 export async function getBillingMe(): Promise<BillingMeResponse> {

@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -66,6 +67,16 @@ fun NewApplicationScreen(
             modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            SmartFillCard(
+                description = state.description,
+                onDescriptionChange = viewModel::onDescriptionChange,
+                onParse = viewModel::parseDescription,
+                parsing = state.parsing,
+                canParse = state.canParse,
+                parseError = state.parseError,
+                filledOnce = state.parseFilledOnce,
+            )
+
             OutlinedTextField(
                 value = state.company,
                 onValueChange = { v -> viewModel.onField { copy(company = v) } },
@@ -176,6 +187,60 @@ fun NewApplicationScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SmartFillCard(
+    description: String,
+    onDescriptionChange: (String) -> Unit,
+    onParse: () -> Unit,
+    parsing: Boolean,
+    canParse: Boolean,
+    parseError: String?,
+    filledOnce: Boolean,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("✨ Smart fill", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = "Paste a sentence or two about the job. We'll auto-fill the form below — you can still edit any field before saving.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedTextField(
+                value = description,
+                onValueChange = onDescriptionChange,
+                label = { Text("Job description") },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 3,
+                maxLines = 8,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (filledOnce && parseError == null) {
+                    Text(
+                        text = "Filled — review fields below.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                }
+                Button(onClick = onParse, enabled = canParse) {
+                    if (parsing) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Parse")
+                    }
+                }
+            }
+            parseError?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
         }
     }

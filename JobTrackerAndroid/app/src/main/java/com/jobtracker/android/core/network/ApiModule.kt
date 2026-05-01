@@ -5,6 +5,9 @@ import com.jobtracker.android.BuildConfig
 import com.jobtracker.android.core.auth.AuthApi
 import com.jobtracker.android.core.auth.SessionManager
 import com.jobtracker.android.feature.applications.ApplicationsApi
+import com.jobtracker.android.feature.applications.create.SmartCreateApi
+import com.jobtracker.android.feature.applications.detail.ActivityApi
+import com.jobtracker.android.feature.applications.detail.NotesApi
 import com.jobtracker.android.feature.dashboard.StatsApi
 import kotlinx.serialization.json.Json
 import okhttp3.ConnectionPool
@@ -54,6 +57,9 @@ class ApiModule(
     val authApi: AuthApi = retrofit.create(AuthApi::class.java)
     val applicationsApi: ApplicationsApi = retrofit.create(ApplicationsApi::class.java)
     val statsApi: StatsApi = retrofit.create(StatsApi::class.java)
+    val notesApi: NotesApi = retrofit.create(NotesApi::class.java)
+    val activityApi: ActivityApi = retrofit.create(ActivityApi::class.java)
+    val smartCreateApi: SmartCreateApi = retrofit.create(SmartCreateApi::class.java)
 
     private companion object {
         // Real host comes from HostSelectionInterceptor at runtime; only path prefix matters here.

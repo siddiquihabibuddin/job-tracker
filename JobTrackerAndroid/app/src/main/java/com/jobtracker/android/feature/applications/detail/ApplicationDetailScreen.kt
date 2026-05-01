@@ -41,7 +41,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.jobtracker.android.core.domain.model.ActivityItem
 import com.jobtracker.android.core.domain.model.AppStatus
+import com.jobtracker.android.core.domain.model.Note
 import com.jobtracker.android.feature.applications.list.StatusChip
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -124,6 +126,20 @@ fun ApplicationDetailScreen(
                     Field("Job link", app.jobLink ?: "—")
                 }
             }
+
+            NotesCard(
+                draft = state.noteDraft,
+                onDraftChange = viewModel::onNoteDraftChange,
+                onAdd = viewModel::addNote,
+                addingNote = state.addingNote,
+                notesAddedThisSession = state.notesAddedThisSession,
+            )
+
+            ActivityCard(
+                items = state.activity,
+                loading = state.activityLoading,
+                onRefresh = viewModel::loadActivity,
+            )
 
             if (state.updating) {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -216,5 +232,120 @@ private fun formatSalary(min: Double?, max: Double?, currency: String?): String 
         min != null -> "$cur${min.toLong()}+".trim()
         max != null -> "up to $cur${max.toLong()}".trim()
         else -> "—"
+    }
+}
+
+@Composable
+private fun NotesCard(
+    draft: String,
+    onDraftChange: (String) -> Unit,
+    onAdd: () -> Unit,
+    addingNote: Boolean,
+    notesAddedThisSession: List<Note>,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Notes", style = MaterialTheme.typography.titleMedium)
+            OutlinedTextField(
+                value = draft,
+                onValueChange = onDraftChange,
+                label = { Text("Add a note") },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 2,
+                maxLines = 6,
+            )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Button(
+                    onClick = onAdd,
+                    enabled = !addingNote && draft.isNotBlank(),
+                ) {
+                    if (addingNote) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Add note")
+                    }
+                }
+            }
+            if (notesAddedThisSession.isNotEmpty()) {
+                Text(
+                    text = "Added this session",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                notesAddedThisSession.reversed().forEach { note ->
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(note.body, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            text = note.createdAt,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            } else {
+                Text(
+                    text = "Notes you add appear here. Older notes are recorded in the activity feed below.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActivityCard(
+    items: List<ActivityItem>,
+    loading: Boolean,
+    onRefresh: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Activity", style = MaterialTheme.typography.titleMedium)
+                TextButton(onClick = onRefresh, enabled = !loading) { Text("Refresh") }
+            }
+            when {
+                loading && items.isEmpty() -> {
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    }
+                }
+                items.isEmpty() -> {
+                    Text(
+                        "No activity yet.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                else -> {
+                    items.forEach { item ->
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = item.eventType,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                Text(
+                                    text = item.occurredAt,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Text(item.message, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            }
+        }
     }
 }

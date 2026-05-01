@@ -34,12 +34,16 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jobtracker.android.feature.dashboard.charts.StatusBreakdownChart
 import com.jobtracker.android.feature.dashboard.charts.TrendLineChart
+import com.jobtracker.android.feature.dashboard.widgets.InsightsCard
+import com.jobtracker.android.feature.dashboard.widgets.StaleAppsCard
+import com.jobtracker.android.feature.dashboard.widgets.TopCompaniesCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel,
     onBack: () -> Unit,
+    onOpenApplication: (String) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -118,6 +122,10 @@ fun DashboardScreen(
                     }
                 }
             }
+
+            InsightsCard(insights = state.insights)
+            TopCompaniesCard(companies = state.companies)
+            StaleAppsCard(items = state.staleApps, onOpen = onOpenApplication)
         }
     }
 }

@@ -18,10 +18,16 @@ class IdempotencyInterceptor : Interceptor {
 
     private fun shouldInject(method: String, path: String): Boolean {
         if (method != "POST" && method != "PATCH") return false
-        return path.contains("/applications")
+        // Match `/v1/applications` or `/v1/applications/...` exactly — avoid matching
+        // unrelated paths like `/v1/ai/applications/parse` that just happen to contain
+        // the substring "/applications".
+        return APPLICATIONS_PATH.containsMatchIn(path)
     }
 
     private companion object {
         const val HEADER = "Idempotency-Key"
+        // Match `/v1/applications` exactly or `/v1/applications/...` — excludes
+        // unrelated paths like `/v1/ai/applications/parse`.
+        val APPLICATIONS_PATH = Regex("/v1/applications(/|$)")
     }
 }

@@ -8,6 +8,8 @@ import com.jobtracker.android.core.data.prefs.TokenStore
 import com.jobtracker.android.core.network.ApiModule
 import com.jobtracker.android.core.network.BaseUrlProvider
 import com.jobtracker.android.feature.applications.ApplicationsRepository
+import com.jobtracker.android.feature.applications.create.SmartCreateRepository
+import com.jobtracker.android.feature.applications.detail.NotesAndActivityRepository
 import com.jobtracker.android.feature.dashboard.StatsRepository
 
 class AppContainer(context: Context) {
@@ -36,5 +38,14 @@ class AppContainer(context: Context) {
 
     val statsRepository: StatsRepository = StatsRepository(
         api = apiModule.statsApi,
+    )
+
+    val notesAndActivityRepository: NotesAndActivityRepository = NotesAndActivityRepository(
+        notesApi = apiModule.notesApi,
+        activityApi = apiModule.activityApi,
+    )
+
+    val smartCreateRepository: SmartCreateRepository = SmartCreateRepository(
+        api = apiModule.smartCreateApi,
     )
 }

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jobtracker.android.core.domain.model.AppStatus
 import com.jobtracker.android.core.domain.model.CreateApplicationRequest
+import com.jobtracker.android.core.domain.model.ParsedApplication
 import com.jobtracker.android.feature.applications.ApplicationsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,6 +15,7 @@ import kotlinx.coroutines.launch
 
 class NewApplicationViewModel(
     private val repository: ApplicationsRepository,
+    private val smartCreate: SmartCreateRepository,
 ) : ViewModel() {
 
     @Immutable
@@ -33,14 +35,62 @@ class NewApplicationViewModel(
         val submitting: Boolean = false,
         val error: String? = null,
         val created: Boolean = false,
+        // Smart Create fields
+        val description: String = "",
+        val parsing: Boolean = false,
+        val parseError: String? = null,
+        val parseFilledOnce: Boolean = false,
     ) {
         val canSubmit: Boolean get() = !submitting && company.isNotBlank() && role.isNotBlank()
+        val canParse: Boolean get() = !parsing && description.isNotBlank()
     }
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
     fun onField(update: UiState.() -> UiState) = _state.update { it.update().copy(error = null) }
+
+    fun onDescriptionChange(value: String) =
+        _state.update { it.copy(description = value, parseError = null) }
+
+    fun parseDescription() {
+        val s = _state.value
+        if (!s.canParse) return
+        _state.update { it.copy(parsing = true, parseError = null) }
+        viewModelScope.launch {
+            smartCreate.parse(s.description)
+                .onSuccess { parsed -> mergeParsedFields(parsed) }
+                .onFailure {
+                    _state.update {
+                        it.copy(
+                            parsing = false,
+                            parseError = "Smart fill is unavailable. Please fill the form manually.",
+                        )
+                    }
+                }
+        }
+    }
+
+    private fun mergeParsedFields(parsed: ParsedApplication) {
+        _state.update { current ->
+            current.copy(
+                parsing = false,
+                parseError = null,
+                parseFilledOnce = true,
+                company = parsed.company?.takeIf { it.isNotBlank() } ?: current.company,
+                role = parsed.role?.takeIf { it.isNotBlank() } ?: current.role,
+                status = parsed.status?.let { runCatching { AppStatus.valueOf(it) }.getOrNull() } ?: current.status,
+                source = parsed.source?.takeIf { it.isNotBlank() } ?: current.source,
+                location = parsed.location?.takeIf { it.isNotBlank() } ?: current.location,
+                appliedAt = parsed.appliedAt ?: current.appliedAt,
+                salaryMin = parsed.salaryMin?.toLong()?.toString() ?: current.salaryMin,
+                salaryMax = parsed.salaryMax?.toLong()?.toString() ?: current.salaryMax,
+                currency = parsed.currency?.takeIf { it.isNotBlank() } ?: current.currency,
+                jobLink = parsed.jobLink?.takeIf { it.isNotBlank() } ?: current.jobLink,
+                notes = parsed.notes?.takeIf { it.isNotBlank() } ?: current.notes,
+            )
+        }
+    }
 
     fun submit() {
         val s = _state.value

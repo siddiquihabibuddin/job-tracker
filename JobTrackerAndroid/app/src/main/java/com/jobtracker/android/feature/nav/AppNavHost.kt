@@ -92,7 +92,12 @@ fun AppNavHost(container: AppContainer) {
 
         composable(Routes.NEW_APPLICATION) {
             val vm: NewApplicationViewModel = viewModel(factory = viewModelFactory {
-                initializer { NewApplicationViewModel(container.applicationsRepository) }
+                initializer {
+                    NewApplicationViewModel(
+                        container.applicationsRepository,
+                        container.smartCreateRepository,
+                    )
+                }
             })
             NewApplicationScreen(
                 viewModel = vm,
@@ -107,7 +112,13 @@ fun AppNavHost(container: AppContainer) {
         ) { backStack ->
             val id = backStack.arguments?.getString("id").orEmpty()
             val vm: ApplicationDetailViewModel = viewModel(factory = viewModelFactory {
-                initializer { ApplicationDetailViewModel(container.applicationsRepository, id) }
+                initializer {
+                    ApplicationDetailViewModel(
+                        container.applicationsRepository,
+                        container.notesAndActivityRepository,
+                        id,
+                    )
+                }
             })
             ApplicationDetailScreen(
                 viewModel = vm,
@@ -123,6 +134,7 @@ fun AppNavHost(container: AppContainer) {
             DashboardScreen(
                 viewModel = vm,
                 onBack = { navController.popBackStack() },
+                onOpenApplication = { id -> navController.navigate(Routes.applicationDetail(id)) },
             )
         }
 

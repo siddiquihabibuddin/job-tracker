@@ -28,3 +28,30 @@ data class TrendResponse(
     val period: String,
     val points: List<TrendPoint> = emptyList(),
 )
+
+@Immutable
+@Serializable
+data class Insights(
+    val insights: List<String> = emptyList(),
+    val generatedAt: String? = null,
+)
+
+@Immutable
+@Serializable
+data class CompanyCount(
+    val company: String,
+    val count: Long,
+    val lastAppliedAt: String? = null,
+)
+
+@Immutable
+@Serializable
+data class StaleApp(
+    val appId: String,
+    val company: String,
+    val role: String,
+    val status: String,
+    val daysSinceLastEvent: Int,
+    val flaggedAt: String? = null,
+    val appliedAt: String? = null,
+)

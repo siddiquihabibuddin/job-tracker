@@ -284,26 +284,13 @@ public class StatsService {
     }
 
     private OpenWindowsDto queryOpenWindows(UUID userId, String tz) {
-        String clientToday = (tz != null && !tz.isBlank())
-            ? "(NOW() AT TIME ZONE '" + tz.replace("'", "") + "')::date"
-            : "CURRENT_DATE";
-        String snapSql =
-            "SELECT " +
-            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) = " + clientToday + " AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS today, " +
-            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) = " + clientToday + " - 1 AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS yesterday, " +
-            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= " + clientToday + " - 7   AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last7d, " +
-            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= " + clientToday + " - 15  AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last15d, " +
-            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= " + clientToday + " - 30  AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last30d " +
-            "FROM applications_snapshot WHERE user_id=? AND deleted_at IS NULL";
-
         long[] snapResult = {0, 0, 0, 0, 0};
-        jdbc.query(snapSql, (RowCallbackHandler) rs -> {
-            snapResult[0] = rs.getLong(1);
-            snapResult[1] = rs.getLong(2);
-            snapResult[2] = rs.getLong(3);
-            snapResult[3] = rs.getLong(4);
-            snapResult[4] = rs.getLong(5);
-        }, userId);
+        try {
+            queryOpenWindowsSnapshot(userId, tz, snapResult);
+        } catch (org.springframework.dao.DataAccessException e) {
+            log.warn("Falling back to CURRENT_DATE for open-windows query: client tz '{}' rejected by database", tz, e);
+            queryOpenWindowsSnapshot(userId, null, snapResult);
+        }
 
         LocalDate today = LocalDate.now();
         LocalDate cutoff3m = today.minusDays(92);
@@ -334,5 +321,27 @@ public class StatsService {
 
         return new OpenWindowsDto(snapResult[0], snapResult[1], snapResult[2], snapResult[3], snapResult[4],
                                   aggResult[0], aggResult[1], aggResult[2], aggResult[3]);
+    }
+
+    private void queryOpenWindowsSnapshot(UUID userId, String tz, long[] snapResult) {
+        String clientToday = (tz != null && !tz.isBlank())
+            ? "(NOW() AT TIME ZONE '" + tz.replace("'", "") + "')::date"
+            : "CURRENT_DATE";
+        String snapSql =
+            "SELECT " +
+            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) = " + clientToday + " AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS today, " +
+            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) = " + clientToday + " - 1 AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS yesterday, " +
+            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= " + clientToday + " - 7   AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last7d, " +
+            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= " + clientToday + " - 15  AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last15d, " +
+            "  COUNT(*) FILTER (WHERE COALESCE(applied_at, created_at::date) >= " + clientToday + " - 30  AND status NOT IN ('REJECTED','ACCEPTED','WITHDRAWN')) AS last30d " +
+            "FROM applications_snapshot WHERE user_id=? AND deleted_at IS NULL";
+
+        jdbc.query(snapSql, (RowCallbackHandler) rs -> {
+            snapResult[0] = rs.getLong(1);
+            snapResult[1] = rs.getLong(2);
+            snapResult[2] = rs.getLong(3);
+            snapResult[3] = rs.getLong(4);
+            snapResult[4] = rs.getLong(5);
+        }, userId);
     }
 }

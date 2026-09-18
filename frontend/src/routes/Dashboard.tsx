@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getBreakdown, getInsights, getRoleCounts, getStaleApps, getTopCompanies, getTrend, type BreakdownResponse, type CompanyCount, type RoleCountsResponse, type StaleApp, type TrendPoint } from '../api/stats'
+import { getBreakdown, getRoleCounts, getStaleApps, getTopCompanies, getTrend, type BreakdownResponse, type CompanyCount, type RoleCountsResponse, type StaleApp, type TrendPoint } from '../api/stats'
+import { getAiInsights } from '../api/ai'
 import DashboardHeader from '../components/dashboard/DashboardHeader'
 import OpenWindowsCards from '../components/dashboard/OpenWindowsCards'
 import AppliedVsRejectedChart from '../components/dashboard/AppliedVsRejectedChart'
@@ -56,7 +57,7 @@ export default function Dashboard() {
     refetch: refetchInsights,
   } = useQuery({
     queryKey: ['insights'],
-    queryFn: getInsights,
+    queryFn: () => getAiInsights(),
     staleTime: 30 * 60 * 1000,
     retry: 1,
     enabled: !USE_MOCK,

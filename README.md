@@ -81,9 +81,8 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
                          │    │     PostgreSQL       │  │  Redis  │   │            │
                          │    │    jt_apps :5432    │  │  :6379  │   │            │
                          │    │  applications       │  │  5m TTL │   │            │
-                         │    │  outbox_events      │  │ 30m TTL │   │            │
-                         │    └─────────────────────┘  │(AI ins.)│   │            │
-                         │                             └─────────┘   │            │
+                         │    │  outbox_events      │  └─────────┘   │            │
+                         │    └─────────────────────┘                │            │
                          │                                            │            │
                          │    ┌─────────────────────┐  ┌─────────────┴─────────┐  │
                          │    │     PostgreSQL       │  │    Stats Listener     │  │
@@ -107,18 +106,24 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
                          │                                                         │
                          │    ┌───────────────────────┐  ┌─────────────────────┐  │
                          │    │   AI Service  :8085   │  │   Config Server     │  │
-                         │    │  Spring AI ChatClient │  │      :8888          │  │
-                         │    │  POST /v1/ai/insights │  │  Spring Cloud Config│  │
-                         │    │  POST /v1/ai/         │  └─────────────────────┘  │
-                         │    │       applications/   │                            │
-                         │    │       parse  (NL→DTO) │                            │
+                         │    │ Spring AI ChatClient  │  │      :8888          │  │
+                         │    │ RAG: retrieves top-K  │  │  Spring Cloud Config│  │
+                         │    │ app records (notes +  │  └─────────────────────┘  │
+                         │    │ history) via          │                            │
+                         │    │ applications-service  │                            │
+                         │    │ POST /v1/ai/insights  │                            │
+                         │    │ POST /v1/ai/          │                            │
+                         │    │      applications/    │                            │
+                         │    │      parse (NL->DTO)  │                            │
                          │    └──────────┬────────────┘                            │
-                         │               │                                         │
-                         │    ┌──────────▼────────────┐                            │
-                         │    │   Ollama  :11434      │                            │
-                         │    │  qwen2.5:1.5b         │                            │
-                         │    │  local LLM, no API key│                            │
-                         │    └───────────────────────┘                            │
+                         │               │                                          │
+                         │    ┌─────────────────────┐──┌─────────────────────────┐  │
+                         │    │    Ollama :11434    │──│       PostgreSQL        │  │
+                         │    │ qwen2.5:1.5b (chat) │  │      jt_ai  :5432       │  │
+                         │    │  nomic-embed-text   │  │   vector_store table    │  │
+                         │    │    (embeddings)     │  │  pgvector + HNSW index  │  │
+                         │    │     no API key      │  │   content-hash synced   │  │
+                         │    └─────────────────────┘  └─────────────────────────┘  │
                          │                                                         │
                          │    ┌─────────────────────┐  ┌──────────────────────┐  │
                          │    │  Prometheus  :9090   │◀─┤   Grafana  :3001     │  │
@@ -140,12 +145,12 @@ JobTracker follows an **event-driven CQRS-like pattern** — writes and reads ar
 | **applications-service** | 8081 | Write service — REST CRUD, JPA + Hibernate, publishes Kafka events |
 | **stats-service** | 8082 | Read service — analytics from pre-computed agg tables, Redis-cached; serves activity feed |
 | **stats-listener** | 8083 | Kafka consumer — two groups: `stats-service` (snapshot/agg) + `activity-service` (activity feed) |
-| **ai-service** | 8085 | LLM-backed AI service — Spring AI `ChatClient` against Ollama. Powers two endpoints: dashboard insights (pulls per-user analytics from stats-service, forwards the JWT) and natural-language application parsing (`POST /v1/ai/applications/parse` — extracts a structured DTO from a free-text description, no persistence) |
+| **ai-service** | 8085 | LLM-backed AI service — Spring AI `ChatClient` against Ollama, backed by a **RAG pipeline**: syncs a per-user pgvector index from `applications-service` (content-hash based, only re-embeds what changed), retrieves the most relevant application records via similarity search, and combines them with per-user aggregate stats to ground the LLM prompt. Also powers natural-language application parsing (`POST /v1/ai/applications/parse` — extracts a structured DTO from a free-text description, no persistence) |
 | **config-server** | 8888 | Centralized config for all services (Spring Cloud Config) |
-| **PostgreSQL** | 5432 | Two databases: `jt_apps` (write) and `jt_stats` (read) |
+| **PostgreSQL** | 5432 | Three databases: `jt_apps` (write), `jt_stats` (read), `jt_ai` (pgvector store for RAG insights) |
 | **Kafka** | 9092 | KRaft mode, topic: `application-events`, two consumer groups |
-| **Redis** | 6379 | Cache for stats endpoints (5-min TTL) and AI insights (30-min TTL) |
-| **Ollama** | 11434 | Local LLM server — serves `qwen2.5:1.5b` for AI insights generation |
+| **Redis** | 6379 | Cache for stats endpoints (5-min TTL) |
+| **Ollama** | 11434 | Local LLM server — serves `qwen2.5:1.5b` for chat and `nomic-embed-text` for embeddings, both used by `ai-service` |
 | **Prometheus** | 9090 | Scrapes `/actuator/prometheus` from all Spring Boot services |
 | **Grafana** | 3001 | Pre-built dashboard: request rates, JVM heap, HTTP latency, Kafka lag |
 | **Zipkin** | 9411 | Distributed tracing, 100% sampling |
@@ -175,7 +180,7 @@ This is the **Transactional Outbox Pattern** — Kafka being down never causes d
 - **Bulk delete** *(Premium)* — Select any number of applications via per-row checkboxes or the select-all header checkbox and delete them all in one request (`POST /v1/applications/bulk-delete`); server soft-deletes each owned application, publishes a Kafka event per deletion, and returns `{ deleted, skipped }`
 - **Advanced filtering** — Filter applications by status, search (company/role), month, year, and call received; sort by apply date or date added; page-based pagination (20 per page)
 - **Activity Feed** — Each Application Detail page shows a live activity timeline. Every create, status update, and deletion is translated into a human-readable message (e.g. "Applied for SWE at Google via LinkedIn", "Status changed to OFFER") and stored in the `activity_feed` table. Powered by Kafka fan-out: a second consumer group (`activity-service`) runs in `stats-listener` alongside the existing `stats-service` group, tracking independent offsets on the same `application-events` topic — no producer changes required. Idempotent via a unique constraint on `(app_id, event_type, occurred_at)`
-- **AI Insights** *(Premium)* — The Dashboard includes an "AI Insights" card powered by a locally-running LLM (Ollama + `qwen2.5:1.5b`). A dedicated **`ai-service`** (port 8085) handles the LLM round-trip using Spring AI's `ChatClient` abstraction — it pulls per-user analytics from `stats-service` via the gateway (forwarding the caller's JWT), stuffs them into a prompt template, and asks the model for 3–5 concise, actionable coaching insights. Endpoint: `POST /v1/ai/insights`. Fully offline — no API key required
+- **AI Insights (RAG-grounded)** *(Premium)* — The Dashboard includes an "AI Insights" card powered by a locally-running LLM (Ollama + `qwen2.5:1.5b`) and a **retrieval-augmented generation pipeline**, not just aggregate numbers. On each request, **`ai-service`** (port 8085) syncs a per-user vector index in Postgres/pgvector (`jt_ai`) from live application data pulled from `applications-service` — company, role, status, salary, dates, tags, free-text notes, and the full status-change timeline — via a dedicated `GET /v1/applications/context` endpoint (forwarding the caller's JWT). Each application is embedded with Ollama's `nomic-embed-text` model; a SHA-256 content hash means only applications that actually changed since the last sync are re-embedded. At generation time, the service runs targeted similarity searches (ghosting/stalled applications, fast-moving applications, notable notes/red flags), merges the retrieved records with per-user aggregate stats, and asks the chat model for 3–5 concise, actionable insights grounded in the user's real data — not just restated counts. Endpoint: `POST /v1/ai/insights`. Fully offline — no API key required
 - **Smart Create (Natural-Language Application Entry)** *(Premium)* — On the New Application page, a "✦ Smart create with AI" section accepts a free-text sentence like *"Today I applied to a senior engineer position at Microsoft using LinkedIn with a salary range of $100,000 to $200,000"* and extracts a structured DTO (company, role, status, source, salary range, currency, applied date, location, job link, tags, notes). The same `ai-service` handles the parsing: `POST /v1/ai/applications/parse` returns parsed fields **without persisting** so the user can review and edit the form before saving via the existing create flow. The frontend merges parsed values non-destructively (never overwrites a field the user has already typed). Built on the same Spring AI `ChatClient` + Ollama stack as AI Insights — fully offline, no API key
 - **Analytics Dashboard** — By Month / By Year toggle with grouped Applied vs Rejected bar chart, summary table, 7 open-window KPI cards (last 7d / 15d / 30d / 3mo / 6mo / 9mo / 1yr), and a **Top Companies** widget ranking the top 10 companies by application count with a relative fill bar for quick visual comparison
 - **Pre-computed aggregate tables** — `agg_monthly` and `agg_weekly` in `jt_stats` are maintained in-sync by stats-listener (recomputed atomically on every Kafka event); stats-service reads from these tables with indexed scans instead of live GROUP BY on the raw snapshot
@@ -231,6 +236,9 @@ Response: { "tier": "FREE|PREMIUM", "tierUpdatedAt": "2026-04-29T..." }
 
 ```
 GET    /v1/applications?status=APPLIED&search=google&month=4&year=2025&gotCall=true&sortBy=appliedAt&page=0&limit=20
+GET    /v1/applications/context?page=0&limit=100   # same filters as above; each item also
+                                                     # embeds notes[] and statusHistory[] —
+                                                     # used by ai-service to build RAG context
 POST   /v1/applications                     (Idempotency-Key header required)
 GET    /v1/applications/{id}
 PATCH  /v1/applications/{id}                (Idempotency-Key header required)
@@ -280,16 +288,14 @@ Response: {
   rows: [{ label, periodNum, engineerDev, manager, architect, other }]
 }
 
-GET /v1/stats/insights
-Response: { insights: ["...", "...", "..."], generatedAt }
-# Legacy in-process implementation served by stats-service; cached in Redis (30-min TTL)
-
-POST /v1/ai/insights
+POST /v1/ai/insights   [Premium]
 Body:     { "windowDays": 30 }   # optional, defaults to 30
 Response: { insights: ["...", "...", "..."], generatedAt }
-# New Spring AI implementation served by ai-service. Aggregates summary, 12-week trend,
-# current-year monthly breakdown, and role distribution by calling stats-service over HTTP
-# (auth header is forwarded), then asks Ollama via ChatClient for 3-5 insights
+# RAG-based implementation served by ai-service. Syncs a per-user pgvector index (jt_ai) from
+# live application records (fetched via GET /v1/applications/context, auth header forwarded),
+# embedding only what changed since the last sync (SHA-256 content hash). Retrieves the most
+# relevant records via similarity search, combines them with aggregate stats pulled from
+# stats-service, and asks Ollama via ChatClient for 3-5 insights grounded in real data
 
 POST /v1/ai/applications/parse
 Body:     { "description": "Today I applied to a senior engineer position at Microsoft using LinkedIn with a salary range of $100,000 to $200,000" }
@@ -343,7 +349,8 @@ cp .env.example .env
 ```bash
 cd JobTracker/backend
 
-# First run — wipe volume so init-db.sql creates the jt_stats database
+# First run — wipe volume so init-db.sql creates jt_stats, jt_alerts, and jt_ai
+# (jt_ai also gets the pgvector extension enabled — see init-db.sql)
 docker compose down -v
 docker compose up --build
 
@@ -352,9 +359,9 @@ docker compose up
 ```
 
 Docker startup order is automatically enforced:
-`postgres + kafka + redis + config-server + ollama` → `applications-service + stats-service + stats-listener + ollama-init` → `ai-service` (waits on `ollama` healthy + `stats-service`) → `api-gateway`
+`postgres + kafka + redis + config-server + ollama` → `applications-service + stats-service + stats-listener + ollama-init` → `ai-service` (waits on `postgres` healthy + `ollama` healthy + `stats-service`) → `api-gateway`
 
-> **First run note:** An `ollama-init` container automatically pulls `qwen2.5:1.5b` (~1GB) on first startup. The AI Insights card shows a graceful fallback message until the download completes. The model is cached in the `ollama_data` Docker volume and is not re-downloaded on subsequent runs.
+> **First run note:** An `ollama-init` container automatically pulls `qwen2.5:1.5b` (~1GB, chat) and `nomic-embed-text` (~275MB, embeddings) on first startup. The AI Insights card shows a graceful fallback message until the download completes. Both models are cached in the `ollama_data` Docker volume and are not re-downloaded on subsequent runs. Postgres runs the `pgvector/pgvector:pg16` image (a drop-in `postgres:16` build with the `vector` extension available).
 
 ### 3. Start the frontend
 
@@ -425,7 +432,11 @@ JobTracker/
 - `activity_feed` — per-application event timeline; one row per Kafka event, translated to a human-readable message; idempotent via unique constraint on `(app_id, event_type, occurred_at)`
 - `stale_flags` — tracks applications with no status change for 14+ days; populated by a scheduled job in `stats-listener`; powers the "Possibly Ghosting" section on the dashboard
 
-All schema changes are managed by Flyway migrations (`ddl-auto: validate`).
+**`jt_ai`** (RAG vector store for AI Insights)
+
+- `vector_store` — managed by Spring AI's `PgVectorStore` (`initialize-schema: true`, HNSW index, cosine distance); one row per application, `id` = application UUID, `content` = a rendered text summary (company/role/status/dates/notes/status history), `metadata` includes `userId` (used to scope similarity search per user) and a `contentHash` (used by `ai-service` to skip re-embedding unchanged applications)
+
+All schema changes in `jt_apps` and `jt_stats` are managed by Flyway migrations (`ddl-auto: validate`); `jt_ai`'s single table is bootstrapped by Spring AI's own pgvector schema initializer since it holds no JPA entities.
 
 ---
 

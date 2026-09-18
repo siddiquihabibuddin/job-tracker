@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.jobtracker.stats.api.dto.BreakdownResponseDto;
 import com.jobtracker.stats.api.dto.CompanyCountDto;
-import com.jobtracker.stats.api.dto.InsightsDto;
 import com.jobtracker.stats.api.dto.RoleCountsResponseDto;
 import com.jobtracker.stats.api.dto.StatsSummaryDto;
 import com.jobtracker.stats.api.dto.TrendResponseDto;
@@ -31,7 +30,6 @@ public class CacheConfig {
     public static final String CACHE_TREND     = "stats-trend";
     public static final String CACHE_BREAKDOWN = "stats-breakdown";
     public static final String CACHE_ROLES     = "stats-roles";
-    public static final String CACHE_INSIGHTS  = "stats-insights";
     public static final String CACHE_COMPANIES = "stats-companies";
 
     @Bean
@@ -60,10 +58,6 @@ public class CacheConfig {
                 .withCacheConfiguration(CACHE_ROLES,
                         base.serializeValuesWith(fromSerializer(
                                 new Jackson2JsonRedisSerializer<>(om, RoleCountsResponseDto.class))))
-                .withCacheConfiguration(CACHE_INSIGHTS,
-                        base.entryTtl(Duration.ofMinutes(30))
-                            .serializeValuesWith(fromSerializer(
-                                new Jackson2JsonRedisSerializer<>(om, InsightsDto.class))))
                 .withCacheConfiguration(CACHE_COMPANIES,
                         base.serializeValuesWith(fromSerializer(
                                 new Jackson2JsonRedisSerializer<>(om,

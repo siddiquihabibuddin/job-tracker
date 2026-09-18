@@ -86,6 +86,30 @@ public class ApplicationService {
         return new PageResponse<>(items, pageable.getPageSize(), p.getTotalElements(), p.getTotalPages(), p.getNumber());
     }
 
+    public PageResponse<ApplicationContextDto> listWithContext(String status, String search, Integer month, Integer year, Boolean gotCall, String sortBy, int page, int limit) {
+        String sortField = "appliedAt".equalsIgnoreCase(sortBy) ? "appliedAt" : "createdAt";
+        Pageable pageable = PageRequest.of(Math.max(0, page), Math.min(100, Math.max(1, limit)), Sort.by(Sort.Direction.DESC, sortField));
+        UUID userId = currentUserId();
+
+        Specification<Application> spec = buildSpec(userId, status, search, month, year, gotCall);
+        Page<Application> p = appRepo.findAll(spec, pageable);
+
+        List<UUID> appIds = p.getContent().stream().map(Application::getId).toList();
+        var notesByApp = noteRepo.findAllByApplication_IdIn(appIds).stream()
+                .collect(java.util.stream.Collectors.groupingBy(n -> n.getApplication().getId()));
+        var historyByApp = histRepo.findAllByApplication_IdIn(appIds).stream()
+                .collect(java.util.stream.Collectors.groupingBy(h -> h.getApplication().getId()));
+
+        var items = p.getContent().stream()
+                .map(a -> mapper.toContextDto(
+                        a,
+                        notesByApp.getOrDefault(a.getId(), List.of()).stream().map(mapper::toDto).toList(),
+                        historyByApp.getOrDefault(a.getId(), List.of()).stream().map(mapper::toDto).toList()))
+                .toList();
+
+        return new PageResponse<>(items, pageable.getPageSize(), p.getTotalElements(), p.getTotalPages(), p.getNumber());
+    }
+
     private Specification<Application> buildSpec(UUID userId, String status, String search, Integer month, Integer year, Boolean gotCall) {
         return (root, query, cb) -> {
             var predicates = new java.util.ArrayList<Predicate>();

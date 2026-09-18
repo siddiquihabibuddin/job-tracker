@@ -2,6 +2,10 @@ server:
   port: 8085
 
 spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/jt_ai}
+    username: ${DB_USER:jt}
+    password: ${DB_PASSWORD:jtpass}
   ai:
     ollama:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
@@ -9,9 +13,21 @@ spring:
         options:
           model: ${OLLAMA_MODEL:qwen2.5:1.5b}
           temperature: 0.3
+      embedding:
+        options:
+          model: ${OLLAMA_EMBED_MODEL:nomic-embed-text}
+    vectorstore:
+      pgvector:
+        initialize-schema: true
+        dimensions: 768
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
 
 stats:
   base-url: ${STATS_BASE_URL:http://localhost:8080}
+
+applications:
+  base-url: ${APPLICATIONS_BASE_URL:http://localhost:8080}
 
 security:
   jwt:

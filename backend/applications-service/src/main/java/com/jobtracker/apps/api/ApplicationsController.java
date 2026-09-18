@@ -58,6 +58,21 @@ public class ApplicationsController {
         return svc.list(status, search, month, year, gotCall, sortBy, page, limit);
     }
 
+    // List with notes + status history embedded — used by ai-service to build RAG context
+    @GetMapping("/context")
+    public PageResponse<ApplicationContextDto> context(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Boolean gotCall,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(defaultValue = "0") @Min(0) @Max(10000) int page,
+            @RequestParam(defaultValue = "50") @Min(1) @Max(100) int limit
+    ) {
+        return svc.listWithContext(status, search, month, year, gotCall, sortBy, page, limit);
+    }
+
     // Get by id
     @GetMapping("/{id}")
     public ApplicationDto get(@PathVariable UUID id) {

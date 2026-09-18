@@ -6,6 +6,9 @@ Thumbs.db
 .env
 backend/.env
 
+# DB backups — may contain user data
+backend/db-backups/
+
 # Editor
 .idea/
 .vscode/

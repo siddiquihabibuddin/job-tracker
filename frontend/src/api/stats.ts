@@ -82,16 +82,6 @@ export async function getRoleCounts(groupBy: 'month' | 'year', year?: number): P
   return res.data
 }
 
-export interface InsightsResponse {
-  insights: string[]
-  generatedAt: string
-}
-
-export async function getInsights(): Promise<InsightsResponse> {
-  const res = await httpStats.get<InsightsResponse>('/stats/insights')
-  return res.data
-}
-
 export interface ActivityItem {
   id: string
   eventType: string

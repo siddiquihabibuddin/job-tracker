@@ -53,6 +53,40 @@ public class ApplicationMapper {
         return new StatusChangeDto(h.getId(), h.getFromStatus(), h.getToStatus(), h.getChangedAt());
     }
 
+    public ApplicationContextDto toContextDto(Application a, List<NoteDto> notes, List<StatusChangeDto> statusHistory) {
+        String[] tags = null;
+        if (a.getTagsJson() != null) {
+            try {
+                tags = om.readValue(a.getTagsJson(), new TypeReference<>() {});
+            } catch (IOException e) {
+                // ignore bad tags; keep null
+            }
+        }
+        return new ApplicationContextDto(
+                a.getId(),
+                a.getCompany(),
+                a.getRole(),
+                a.getStatus(),
+                a.getSource(),
+                a.getLocation(),
+                a.getSalaryMin(),
+                a.getSalaryMax(),
+                a.getCurrency(),
+                a.getNextFollowUpOn(),
+                tags,
+                a.getCreatedAt(),
+                a.getUpdatedAt(),
+                a.getAppliedAt(),
+                a.getJobLink(),
+                a.getResumeUploaded(),
+                a.isGotCall(),
+                a.getRejectDate(),
+                a.getLoginDetails(),
+                notes,
+                statusHistory
+        );
+    }
+
     public String tagsToJson(String[] tags) {
         if (tags == null) return null;
         try { return om.writeValueAsString(tags); }

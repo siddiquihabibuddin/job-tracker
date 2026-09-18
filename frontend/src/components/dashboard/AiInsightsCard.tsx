@@ -1,4 +1,4 @@
-import type { InsightsResponse } from '../../api/stats'
+import type { InsightsResponse } from '../../api/ai'
 
 interface AiInsightsCardProps {
   insightsData: InsightsResponse | undefined

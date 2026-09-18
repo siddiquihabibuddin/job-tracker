@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16
+    image: pgvector/pgvector:pg16
     container_name: jt_postgres
     environment:
       POSTGRES_USER: ${DB_USER}
@@ -172,7 +172,7 @@ services:
         condition: service_healthy
     environment:
       OLLAMA_HOST: http://ollama:11434
-    entrypoint: ["ollama", "pull", "qwen2.5:1.5b"]
+    entrypoint: ["/bin/sh", "-c", "ollama pull qwen2.5:1.5b && ollama pull nomic-embed-text"]
     restart: "no"
 
   stats-service:
@@ -194,8 +194,6 @@ services:
       SERVER_PORT: 8082
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
-      OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_MODEL: qwen2.5:1.5b
     ports:
       - "8082:8082"
     deploy:
@@ -234,24 +232,32 @@ services:
       context: ./ai-service
     container_name: jt_ai
     depends_on:
+      postgres:
+        condition: service_healthy
       config-server:
         condition: service_healthy
       ollama:
         condition: service_healthy
       stats-service:
         condition: service_started
+      applications-service:
+        condition: service_started
     environment:
       JWT_SECRET: ${JWT_SECRET}
       SERVER_PORT: 8085
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: qwen2.5:1.5b
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/jt_ai
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
       STATS_BASE_URL: http://api-gateway:8080
+      APPLICATIONS_BASE_URL: http://api-gateway:8080
     ports:
       - "8085:8085"
     deploy:
       resources:
         limits:
-          memory: 512m
+          memory: 768m
         reservations:
           memory: 256m
 

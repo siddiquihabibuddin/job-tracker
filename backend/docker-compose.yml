@@ -118,6 +118,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SERVER_PORT: 8083
+      # Heap must sit below the 512m container limit, or the kernel OOM-kills the JVM.
+      JAVA_OPTS: "-XX:+UseZGC -Xms256m -Xmx384m"
     ports:
       - "8083:8083"
     deploy:

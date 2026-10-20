@@ -90,6 +90,8 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       SERVER_PORT: 8081
       CSV_IMPORT_FOLDER: /app/csv-imports
+      # Heap must sit below the 512m container limit, or the kernel OOM-kills the JVM.
+      JAVA_OPTS: "-XX:+UseZGC -Xms256m -Xmx384m"
     volumes:
       - ${HOST_CSV_FOLDER:-./csv-imports}:/app/csv-imports
     ports:
@@ -222,6 +224,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       SERVER_PORT: 8084
+      # Heap must sit below the 512m container limit, or the kernel OOM-kills the JVM.
+      JAVA_OPTS: "-XX:+UseZGC -Xms256m -Xmx384m"
     ports:
       - "8084:8084"
     deploy:

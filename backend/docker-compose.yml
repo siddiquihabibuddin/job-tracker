@@ -194,6 +194,8 @@ services:
       SERVER_PORT: 8082
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      # Heap must sit below the 512m container limit, or the kernel OOM-kills the JVM.
+      JAVA_OPTS: "-XX:+UseZGC -Xms256m -Xmx384m"
     ports:
       - "8082:8082"
     deploy:

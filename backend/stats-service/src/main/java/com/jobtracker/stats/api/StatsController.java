@@ -1,6 +1,7 @@
 package com.jobtracker.stats.api;
 
 import com.jobtracker.stats.api.dto.ActivityItemDto;
+import com.jobtracker.stats.api.dto.AveragesDto;
 import com.jobtracker.stats.api.dto.BreakdownResponseDto;
 import com.jobtracker.stats.api.dto.CompanyCountDto;
 import com.jobtracker.stats.api.dto.StaleAppDto;
@@ -48,6 +49,11 @@ public class StatsController {
             @RequestParam(defaultValue = "week") String period,
             @RequestParam(defaultValue = "12") @Min(1) @Max(52) int weeks) {
         return svc.getTrend(currentUserId(), weeks);
+    }
+
+    @GetMapping("/averages")
+    public AveragesDto averages() {
+        return svc.getAverages(currentUserId());
     }
 
     @GetMapping("/breakdown")

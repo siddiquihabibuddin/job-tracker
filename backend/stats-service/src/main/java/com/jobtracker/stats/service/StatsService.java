@@ -1,6 +1,7 @@
 package com.jobtracker.stats.service;
 
 import com.jobtracker.stats.api.dto.ActivityItemDto;
+import com.jobtracker.stats.api.dto.AveragesDto;
 import com.jobtracker.stats.api.dto.BreakdownResponseDto;
 import com.jobtracker.stats.api.dto.CompanyCountDto;
 import com.jobtracker.stats.api.dto.StaleAppDto;
@@ -34,6 +35,9 @@ public class StatsService {
 
     private static final Logger log = LoggerFactory.getLogger(StatsService.class);
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    private static final int AVG_WEEKS = 12;
+    private static final int AVG_MONTHS = 12;
 
     private final JdbcTemplate jdbc;
     private final Counter queriesCounter;
@@ -101,6 +105,39 @@ public class StatsService {
         }
 
         return new TrendResponseDto("week", points);
+    }
+
+    @Cacheable(cacheNames = CacheConfig.CACHE_AVERAGES, key = "#userId + ':trailing'")
+    public AveragesDto getAverages(UUID userId) {
+        log.info("Serving averages query userId={}", userId);
+        queriesCounter.increment();
+
+        // Trailing completed periods only; the current partial week/month is excluded.
+        LocalDate thisMonday = LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        LocalDate weekFrom = thisMonday.minusWeeks(AVG_WEEKS);
+        Long weekTotal = jdbc.queryForObject(
+                "SELECT COALESCE(SUM(cnt),0) FROM agg_weekly WHERE user_id=? AND week_start >= ? AND week_start < ?",
+                Long.class, userId, Date.valueOf(weekFrom), Date.valueOf(thisMonday));
+
+        LocalDate firstOfMonth = LocalDate.now().withDayOfMonth(1);
+        LocalDate monthFrom = firstOfMonth.minusMonths(AVG_MONTHS);
+        int fromYM = monthFrom.getYear() * 12 + monthFrom.getMonthValue();
+        int toYM = firstOfMonth.getYear() * 12 + firstOfMonth.getMonthValue();
+        Long monthTotal = jdbc.queryForObject(
+                "SELECT COALESCE(SUM(cnt),0) FROM agg_monthly WHERE user_id=? AND (year*12 + month) >= ? AND (year*12 + month) < ?",
+                Long.class, userId, fromYM, toYM);
+
+        // Daily = same trailing completed weeks, spread over every calendar day (7 per week).
+        return new AveragesDto(
+                round1((weekTotal == null ? 0 : weekTotal) / (double) (AVG_WEEKS * 7)),
+                round1((weekTotal == null ? 0 : weekTotal) / (double) AVG_WEEKS),
+                round1((monthTotal == null ? 0 : monthTotal) / (double) AVG_MONTHS),
+                AVG_WEEKS, AVG_MONTHS,
+                OffsetDateTime.now().toString());
+    }
+
+    private static double round1(double v) {
+        return Math.round(v * 10.0) / 10.0;
     }
 
     @Cacheable(cacheNames = CacheConfig.CACHE_BREAKDOWN, key = "#userId + ':' + #groupBy + ':' + #year + ':' + #tz")

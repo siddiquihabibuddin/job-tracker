@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getBreakdown, getRoleCounts, getStaleApps, getTopCompanies, getTrend, type BreakdownResponse, type CompanyCount, type RoleCountsResponse, type StaleApp, type TrendPoint } from '../api/stats'
+import { getAverages, getBreakdown, getRoleCounts, getStaleApps, getTopCompanies, getTrend, type Averages, type BreakdownResponse, type CompanyCount, type RoleCountsResponse, type StaleApp, type TrendPoint } from '../api/stats'
 import { getAiInsights } from '../api/ai'
 import DashboardHeader from '../components/dashboard/DashboardHeader'
 import OpenWindowsCards from '../components/dashboard/OpenWindowsCards'
+import AverageCards from '../components/dashboard/AverageCards'
 import AppliedVsRejectedChart from '../components/dashboard/AppliedVsRejectedChart'
 import WeeklyTrendChart from '../components/dashboard/WeeklyTrendChart'
 import RoleBreakdownTable from '../components/dashboard/RoleBreakdownTable'
@@ -70,6 +71,13 @@ export default function Dashboard() {
     staleTime: 60_000,
   })
 
+  const { data: averages, isLoading: averagesLoading } = useQuery<Averages>({
+    queryKey: ['averages'],
+    queryFn: getAverages,
+    enabled: !USE_MOCK,
+    staleTime: 5 * 60 * 1000,
+  })
+
   const { data: trendData, isLoading: trendLoading } = useQuery<TrendPoint[]>({
     queryKey: ['trend', '12'],
     queryFn: () => getTrend('week', 12),
@@ -98,6 +106,8 @@ export default function Dashboard() {
       />
 
       <OpenWindowsCards windows={windows} loading={loading} />
+
+      {!USE_MOCK && <AverageCards averages={averages} loading={averagesLoading} />}
 
       {error && <article><header>Error</header><p>{error}</p></article>}
       {loading && <article aria-busy="true"><p>Loading…</p></article>}

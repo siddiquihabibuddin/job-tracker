@@ -36,9 +36,6 @@ public class StatsService {
     private static final Logger log = LoggerFactory.getLogger(StatsService.class);
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-    private static final int AVG_WEEKS = 12;
-    private static final int AVG_MONTHS = 12;
-
     private final JdbcTemplate jdbc;
     private final Counter queriesCounter;
 
@@ -107,37 +104,53 @@ public class StatsService {
         return new TrendResponseDto("week", points);
     }
 
-    @Cacheable(cacheNames = CacheConfig.CACHE_AVERAGES, key = "#userId + ':trailing'")
-    public AveragesDto getAverages(UUID userId) {
-        log.info("Serving averages query userId={}", userId);
+    @Cacheable(cacheNames = CacheConfig.CACHE_AVERAGES, key = "#userId + ':' + #groupBy + ':' + #year")
+    public AveragesDto getAverages(UUID userId, String groupBy, Integer year) {
+        log.info("Serving averages query userId={} groupBy={} year={}", userId, groupBy, year);
         queriesCounter.increment();
 
-        // Trailing completed periods only; the current partial week/month is excluded.
-        LocalDate thisMonday = LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
-        LocalDate weekFrom = thisMonday.minusWeeks(AVG_WEEKS);
-        Long weekTotal = jdbc.queryForObject(
-                "SELECT COALESCE(SUM(cnt),0) FROM agg_weekly WHERE user_id=? AND week_start >= ? AND week_start < ?",
-                Long.class, userId, Date.valueOf(weekFrom), Date.valueOf(thisMonday));
+        LocalDate today = LocalDate.now();
+        boolean byMonth = "month".equalsIgnoreCase(groupBy);
+        LocalDate start;
+        LocalDate end;
+        long total;
 
-        LocalDate firstOfMonth = LocalDate.now().withDayOfMonth(1);
-        LocalDate monthFrom = firstOfMonth.minusMonths(AVG_MONTHS);
-        int fromYM = monthFrom.getYear() * 12 + monthFrom.getMonthValue();
-        int toYM = firstOfMonth.getYear() * 12 + firstOfMonth.getMonthValue();
-        Long monthTotal = jdbc.queryForObject(
-                "SELECT COALESCE(SUM(cnt),0) FROM agg_monthly WHERE user_id=? AND (year*12 + month) >= ? AND (year*12 + month) < ?",
-                Long.class, userId, fromYM, toYM);
+        if (byMonth) {
+            int y = (year != null) ? year : today.getYear();
+            start = LocalDate.of(y, 1, 1);
+            end = LocalDate.of(y, 12, 31).isAfter(today) ? today : LocalDate.of(y, 12, 31);
+            total = nz(jdbc.queryForObject(
+                    "SELECT COALESCE(SUM(cnt),0) FROM agg_monthly WHERE user_id=? AND year=?",
+                    Long.class, userId, y));
+        } else {
+            // All-time pace: from the first month with data through today.
+            Integer firstYM = jdbc.queryForObject(
+                    "SELECT MIN(year*12 + month - 1) FROM agg_monthly WHERE user_id=?",
+                    Integer.class, userId);
+            if (firstYM == null) {
+                start = today;
+                end = today.minusDays(1); // empty range -> zero averages
+                total = 0;
+            } else {
+                start = LocalDate.of(firstYM / 12, firstYM % 12 + 1, 1);
+                end = today;
+                total = nz(jdbc.queryForObject(
+                        "SELECT COALESCE(SUM(cnt),0) FROM agg_monthly WHERE user_id=?",
+                        Long.class, userId));
+            }
+        }
 
-        // Daily = same trailing completed weeks, spread over every calendar day (7 per week).
+        AverageCalculator.Result r = AverageCalculator.compute(total, start, end);
         return new AveragesDto(
-                round1((weekTotal == null ? 0 : weekTotal) / (double) (AVG_WEEKS * 7)),
-                round1((weekTotal == null ? 0 : weekTotal) / (double) AVG_WEEKS),
-                round1((monthTotal == null ? 0 : monthTotal) / (double) AVG_MONTHS),
-                AVG_WEEKS, AVG_MONTHS,
+                byMonth ? "month" : "year",
+                byMonth ? start.getYear() : null,
+                start.format(DATE_FMT), end.format(DATE_FMT),
+                total, r.daily(), r.weekly(), r.monthly(),
                 OffsetDateTime.now().toString());
     }
 
-    private static double round1(double v) {
-        return Math.round(v * 10.0) / 10.0;
+    private static long nz(Long v) {
+        return v == null ? 0 : v;
     }
 
     @Cacheable(cacheNames = CacheConfig.CACHE_BREAKDOWN, key = "#userId + ':' + #groupBy + ':' + #year + ':' + #tz")

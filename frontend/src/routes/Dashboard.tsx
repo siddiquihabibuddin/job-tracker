@@ -72,8 +72,8 @@ export default function Dashboard() {
   })
 
   const { data: averages, isLoading: averagesLoading } = useQuery<Averages>({
-    queryKey: ['averages'],
-    queryFn: getAverages,
+    queryKey: ['averages', groupBy, groupBy === 'month' ? year : null],
+    queryFn: () => getAverages(groupBy, groupBy === 'month' ? year : undefined),
     enabled: !USE_MOCK,
     staleTime: 5 * 60 * 1000,
   })

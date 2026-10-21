@@ -52,8 +52,10 @@ public class StatsController {
     }
 
     @GetMapping("/averages")
-    public AveragesDto averages() {
-        return svc.getAverages(currentUserId());
+    public AveragesDto averages(
+            @RequestParam(defaultValue = "month") String groupBy,
+            @RequestParam(required = false) Integer year) {
+        return svc.getAverages(currentUserId(), groupBy, year);
     }
 
     @GetMapping("/breakdown")

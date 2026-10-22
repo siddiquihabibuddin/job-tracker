@@ -1,5 +1,7 @@
 package com.jobtracker.stats.service;
 
+import com.jobtracker.stats.api.dto.AveragePeriodDto;
+
 import java.time.LocalDate;
 import java.time.YearMonth;
 
@@ -33,6 +35,22 @@ final class AverageCalculator {
                 round1(total / (double) days),
                 round1(total / (days / 7.0)),
                 round1(total / months));
+    }
+
+    /**
+     * Row for one whole calendar period [periodStart, periodEnd]. The part of the period
+     * that is still in the future is ignored: a period starting after {@code today} is
+     * flagged future (zeros); one that ends after {@code today} is flagged partial and
+     * averaged over the days elapsed so far.
+     */
+    static AveragePeriodDto period(String label, int periodNum, long total,
+                                   LocalDate periodStart, LocalDate periodEnd, LocalDate today) {
+        if (periodStart.isAfter(today)) {
+            return new AveragePeriodDto(label, periodNum, total, 0, 0, 0, false, true);
+        }
+        boolean partial = periodEnd.isAfter(today);
+        Result r = compute(total, periodStart, partial ? today : periodEnd);
+        return new AveragePeriodDto(label, periodNum, total, r.daily(), r.weekly(), r.monthly(), partial, false);
     }
 
     static double round1(double v) {

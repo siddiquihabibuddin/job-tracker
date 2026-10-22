@@ -1,6 +1,7 @@
 package com.jobtracker.stats.service;
 
 import com.jobtracker.stats.api.dto.ActivityItemDto;
+import com.jobtracker.stats.api.dto.AveragePeriodDto;
 import com.jobtracker.stats.api.dto.AveragesDto;
 import com.jobtracker.stats.api.dto.BreakdownResponseDto;
 import com.jobtracker.stats.api.dto.CompanyCountDto;
@@ -146,7 +147,43 @@ public class StatsService {
                 byMonth ? start.getYear() : null,
                 start.format(DATE_FMT), end.format(DATE_FMT),
                 total, r.daily(), r.weekly(), r.monthly(),
+                buildPeriods(userId, byMonth, start, today),
                 OffsetDateTime.now().toString());
+    }
+
+    private List<AveragePeriodDto> buildPeriods(UUID userId, boolean byMonth, LocalDate start, LocalDate today) {
+        String[] labels = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
+        List<AveragePeriodDto> rows = new ArrayList<>();
+
+        if (byMonth) {
+            int y = start.getYear();
+            Map<Integer, Long> totals = new HashMap<>();
+            jdbc.query(
+                    "SELECT month, SUM(cnt) FROM agg_monthly WHERE user_id=? AND year=? GROUP BY month",
+                    (RowCallbackHandler) rs -> totals.put(rs.getInt(1), rs.getLong(2)),
+                    userId, y);
+            for (int m = 1; m <= 12; m++) {
+                LocalDate first = LocalDate.of(y, m, 1);
+                rows.add(AverageCalculator.period(labels[m - 1], m, totals.getOrDefault(m, 0L),
+                        first, first.withDayOfMonth(first.lengthOfMonth()), today));
+            }
+        } else {
+            Map<Integer, Long> totals = new HashMap<>();
+            jdbc.query(
+                    "SELECT year, SUM(cnt) FROM agg_monthly WHERE user_id=? GROUP BY year",
+                    (RowCallbackHandler) rs -> totals.put(rs.getInt(1), rs.getLong(2)),
+                    userId);
+            if (!totals.isEmpty()) {
+                // Contiguous years from the first year with data through the current year.
+                // The first (oldest) year is averaged from its first month with data, as in the all-time card.
+                for (int y = start.getYear(); y <= today.getYear(); y++) {
+                    LocalDate from = (y == start.getYear()) ? start : LocalDate.of(y, 1, 1);
+                    rows.add(AverageCalculator.period(String.valueOf(y), y, totals.getOrDefault(y, 0L),
+                            from, LocalDate.of(y, 12, 31), today));
+                }
+            }
+        }
+        return rows;
     }
 
     private static long nz(Long v) {

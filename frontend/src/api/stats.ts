@@ -25,6 +25,17 @@ export async function getTrend(period = 'week', weeks = 12): Promise<TrendPoint[
   return res.data.points
 }
 
+export interface AveragePeriod {
+  label: string
+  periodNum: number
+  total: number
+  dailyAverage: number
+  weeklyAverage: number
+  monthlyAverage: number
+  partial: boolean
+  future: boolean
+}
+
 export interface Averages {
   groupBy: 'month' | 'year'
   year: number | null
@@ -34,6 +45,7 @@ export interface Averages {
   dailyAverage: number
   weeklyAverage: number
   monthlyAverage: number
+  periods?: AveragePeriod[]
   generatedAt: string
 }
 

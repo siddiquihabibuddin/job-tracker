@@ -1,5 +1,7 @@
 package com.jobtracker.stats.api.dto;
 
+import java.util.List;
+
 public record AveragesDto(
         String groupBy,
         Integer year,
@@ -9,5 +11,6 @@ public record AveragesDto(
         double dailyAverage,
         double weeklyAverage,
         double monthlyAverage,
+        List<AveragePeriodDto> periods,
         String generatedAt
 ) {}

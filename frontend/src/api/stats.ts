@@ -25,17 +25,32 @@ export async function getTrend(period = 'week', weeks = 12): Promise<TrendPoint[
   return res.data.points
 }
 
-export interface Averages {
+export interface AveragePeriod {
+  label: string
+  periodNum: number
+  total: number
   dailyAverage: number
   weeklyAverage: number
   monthlyAverage: number
-  weeks: number
-  months: number
+  partial: boolean
+  future: boolean
+}
+
+export interface Averages {
+  groupBy: 'month' | 'year'
+  year: number | null
+  periodStart: string
+  periodEnd: string
+  total: number
+  dailyAverage: number
+  weeklyAverage: number
+  monthlyAverage: number
+  periods?: AveragePeriod[]
   generatedAt: string
 }
 
-export async function getAverages(): Promise<Averages> {
-  const res = await httpStats.get<Averages>('/stats/averages')
+export async function getAverages(groupBy: 'month' | 'year', year?: number): Promise<Averages> {
+  const res = await httpStats.get<Averages>('/stats/averages', { params: { groupBy, year } })
   return res.data
 }
 

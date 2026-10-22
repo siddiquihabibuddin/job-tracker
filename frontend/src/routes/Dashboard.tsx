@@ -5,6 +5,7 @@ import { getAiInsights } from '../api/ai'
 import DashboardHeader from '../components/dashboard/DashboardHeader'
 import OpenWindowsCards from '../components/dashboard/OpenWindowsCards'
 import AverageCards from '../components/dashboard/AverageCards'
+import AveragesByPeriod from '../components/dashboard/AveragesByPeriod'
 import AppliedVsRejectedChart from '../components/dashboard/AppliedVsRejectedChart'
 import WeeklyTrendChart from '../components/dashboard/WeeklyTrendChart'
 import RoleBreakdownTable from '../components/dashboard/RoleBreakdownTable'
@@ -72,8 +73,8 @@ export default function Dashboard() {
   })
 
   const { data: averages, isLoading: averagesLoading } = useQuery<Averages>({
-    queryKey: ['averages'],
-    queryFn: getAverages,
+    queryKey: ['averages', groupBy, groupBy === 'month' ? year : null],
+    queryFn: () => getAverages(groupBy, groupBy === 'month' ? year : undefined),
     enabled: !USE_MOCK,
     staleTime: 5 * 60 * 1000,
   })
@@ -108,6 +109,8 @@ export default function Dashboard() {
       <OpenWindowsCards windows={windows} loading={loading} />
 
       {!USE_MOCK && <AverageCards averages={averages} loading={averagesLoading} />}
+
+      {!USE_MOCK && <AveragesByPeriod averages={averages} loading={averagesLoading} />}
 
       {error && <article><header>Error</header><p>{error}</p></article>}
       {loading && <article aria-busy="true"><p>Loading…</p></article>}
